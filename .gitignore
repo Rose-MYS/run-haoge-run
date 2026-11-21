@@ -1,0 +1,16 @@
+# 本地素材与发布产物
+/assets/
+/参考素材/
+/音频素材/
+/dist/
+/*.zip
+/*.exe
+/*.apk
+
+# 本机设置和依赖
+.env
+.env.*
+node_modules/
+__pycache__/
+.DS_Store
+Thumbs.db

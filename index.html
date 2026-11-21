@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<link rel="icon" href="data:,">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>郝哥快跑 · 这瓜保熟吗？</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div id="game-container"></div>
+
+<div id="hud" class="hidden">
+  <div class="hud-left">
+    <div class="hud-score">得分 <span id="score">0</span></div>
+    <div class="hud-row">距离 <span id="dist">0</span> m</div>
+    <div class="hud-row">西瓜 <span id="melons">0</span></div>
+    <div class="hud-row">速度 <span id="speed">0</span></div>
+  </div>
+  <div id="chaseWrap" class="chase-wrap">
+    <span class="chase-label">华强</span>
+    <div id="chaseBar" class="chase-bar"><div id="chaseFill" class="chase-fill"></div></div>
+  </div>
+  <div id="invulnTag" class="invuln-tag hidden">无敌中</div>
+  <div class="hud-right">
+    <div class="hud-row">最高 <span id="best">0</span></div>
+    <div class="skill-wrap">
+      <div id="skillSlots" class="skill-slots">
+        <div class="skill-slot"></div>
+        <div class="skill-slot"></div>
+      </div>
+      <button id="skillBtn" class="skill-btn" disabled>保熟！<span class="skill-key">E</span></button>
+    </div>
+    <button id="muteBtn" class="icon-btn" title="静音 (M)">🔊</button>
+    <button id="pauseBtn" class="icon-btn" title="暂停 (空格)">⏸</button>
+  </div>
+</div>
+
+<div id="bubble" class="bubble hidden"></div>
+
+<div id="eggToast" class="egg-toast hidden"></div>
+
+<div id="tipBox" class="tip hidden"></div>
+
+<div id="vignette"></div>
+
+<div id="goldFlash"></div>
+
+<div id="creditLine">作者：明月淞间照</div>
+
+<button id="skipBtn" class="btn skip-btn hidden">跳过结尾</button>
+<div id="skipHint" class="skip-hint hidden">结尾可跳过<span class="skip-key">（Enter/空格）</span></div>
+
+<div id="introScreen" class="screen hidden">
+  <div class="panel intro-panel">
+    <div class="story-step">
+      <div class="story-title">郝哥快跑</div>
+      <p class="story-text">郝哥的瓜摊今天来了位老主顾，点名要买最保熟的瓜。</p>
+    </div>
+    <div class="story-step hidden">
+      <div class="story-title">这瓜保熟吗？</div>
+      <p class="story-text">华强压低声音问。郝哥拍着胸脯保证：保熟！</p>
+    </div>
+    <div class="story-step hidden">
+      <div class="story-title">开跑！</div>
+      <p class="story-text">话音未落，华强掏出了刀。郝哥撒腿就跑，别被追上！</p>
+    </div>
+    <div class="intro-actions">
+      <button id="introSkip" class="btn btn-ghost">跳过</button>
+      <button id="introNext" class="btn">下一步</button>
+    </div>
+  </div>
+</div>
+
+<div id="startScreen" class="screen">
+  <div class="panel">
+    <h1 class="title">郝哥快跑</h1>
+    <div class="subtitle">这瓜保熟吗？</div>
+    <div class="best-line">历史最高 <span id="bestStart">0</span></div>
+    <button id="startBtn" class="btn">开始跑！</button>
+    <button id="eggBtn" class="btn btn-small">彩蛋图鉴</button>
+    <button id="helpBtn" class="btn btn-small">玩法说明</button>
+  </div>
+</div>
+
+<div id="eggModal" class="screen hidden">
+  <div class="panel egg-panel">
+    <h2 class="egg-title">彩蛋图鉴</h2>
+    <div id="eggProgress" class="egg-progress"></div>
+    <div id="eggGrid" class="egg-grid"></div>
+    <button id="eggClose" class="btn btn-small">返回</button>
+  </div>
+</div>
+
+<div id="helpModal" class="screen hidden">
+  <div class="panel help-panel">
+    <h2 class="help-title">玩法说明</h2>
+    <div class="help-box">
+      <div class="legend">
+        <div class="legend-item">🟢 你操控：郝哥（白背心卖瓜老板）</div>
+        <div class="legend-item">🔴 追赶你：华强（黑皮夹克 + 刀）</div>
+      </div>
+      <div class="items">
+        <div class="item-title">道 具</div>
+        <div class="item-row">
+          <div class="item">
+            <img id="iconMelon" alt="西瓜">
+            <div class="item-name">西瓜</div>
+            <div class="item-desc">+1 分</div>
+          </div>
+          <div class="item">
+            <img id="iconGold" alt="金西瓜">
+            <div class="item-name">金西瓜</div>
+            <div class="item-desc">+20 分</div>
+          </div>
+          <div class="item">
+            <img id="iconCert" alt="保熟卡">
+            <div class="item-name">保熟卡</div>
+            <div class="item-desc">+10 分 · 可存 2 张<br>按 E 释放：击退华强<br>+ 金身加速</div>
+          </div>
+        </div>
+      </div>
+      <div class="controls">
+        <div class="ctrl">← → / A D · 换道</div>
+        <div class="ctrl">↑ / W · 跳跃（可二段跳，空中可换道）</div>
+        <div class="ctrl">空格 · 暂停</div>
+        <div class="ctrl">↓ / S · 滑铲</div>
+        <div class="ctrl">E / 技能按钮 · 释放保熟技能</div>
+        <div class="ctrl">大招：小弟抡铁锤把华强打飞出屏幕</div>
+        <div class="ctrl">华强距离条：绿色安全 / 黄色危险 / 红色快被抓 · 保熟卡按 E 推远</div>
+        <div class="ctrl ctrl-touch">手机：左右滑换道 · 上滑跳 · 下滑铲</div>
+      </div>
+      <div class="hint">瓜摊只能跳过去！晾衣杆：滑铲或跳过去！横穿三轮车：看准空隙换道或跳过去！路过大妈（相邻车道）郝哥会喊萨日朗！华强路过一家三口会喊华强/哎华强！撞到东西华强会追近，被抓住就完了！</div>
+      <div class="credit">灵感致敬电视剧《征服》(2003) 经典场面 · 原创卡通演绎</div>
+      <button id="introReplay" class="btn btn-small">再看一遍开场</button>
+      <button id="tipReplay" class="btn btn-small">重看新手提示</button>
+    </div>
+    <button id="helpClose" class="btn btn-small">返回</button>
+  </div>
+</div>
+
+<div id="overScreen" class="screen hidden">
+  <div class="panel over-panel">
+    <h2 class="over-title">萨日朗！萨日朗！</h2>
+    <div class="over-stats">
+      <div class="stat"><span class="label">得分</span><span id="overScore">0</span></div>
+      <div class="stat"><span class="label">距离</span><span id="overDist">0</span> m</div>
+      <div class="stat"><span class="label">西瓜</span><span id="overMelons">0</span></div>
+      <div class="stat"><span class="label">最高分</span><span id="overBest">0</span></div>
+    </div>
+    <div id="newRecord" class="record hidden">🎉 新纪录！</div>
+    <button id="restartBtn" class="btn">再来一局</button>
+  </div>
+</div>
+
+<div id="pauseScreen" class="screen hidden">
+  <div class="panel pause-panel">
+    <h2 class="pause-title">已暂停</h2>
+    <p class="pause-sub">喘口气，再接着跑</p>
+    <div class="pause-actions">
+      <button id="resumeBtn" class="btn">继续游戏</button>
+      <button id="pauseEggBtn" class="btn">彩蛋图鉴</button>
+      <button id="pauseHelpBtn" class="btn">玩法说明</button>
+      <button id="pauseRestartBtn" class="btn btn-small">重新开始</button>
+    </div>
+  </div>
+</div>
+
+<script>window.HAOGE_SOURCE_ONLY = true;</script>
+<script src="js/vendor/three.min.js?v=3"></script>
+<script src="js/vendor/GLTFLoader.js?v=3"></script>
+<script src="js/config.js?v=3"></script>
+<script src="js/audio.js?v=3"></script>
+<script src="js/characters.js?v=3"></script>
+<script src="js/toon.js?v=3"></script>
+<script src="js/models.js?v=3"></script>
+<script src="js/animations.js?v=3"></script>
+<script src="js/obstacles.js?v=3"></script>
+<script src="js/model-switch.js?v=3"></script>
+<script src="js/game.js?v=3"></script>
+</body>
+</html>
