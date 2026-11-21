@@ -354,6 +354,203 @@ window.Runners = (function () {
     return { group: headG, face: fc.face, controls: fc };
   }
 
+  function portraitColor(color) {
+    var material = std(color);
+    material.color.convertSRGBToLinear();
+    return material;
+  }
+
+  var portraitMaterials = {
+    haoge: {
+      skin: portraitColor(0xc38461), warm: portraitColor(0xa25343), hair: portraitColor(0x493528),
+      outfit: portraitColor(0xf5ece0), binding: portraitColor(0xc9bdb0), pants: portraitColor(0x526d7b),
+      shoes: portraitColor(0x514237), sole: portraitColor(0xb79972),
+    },
+    huaqiang: {
+      skin: portraitColor(0xb47860), warm: portraitColor(0x864d44), hair: portraitColor(0x302a2c),
+      outfit: portraitColor(0x353942), binding: portraitColor(0x545760), pants: portraitColor(0x454247),
+      shoes: portraitColor(0x363438), sole: portraitColor(0x5c514b),
+    },
+  };
+
+  function sampleProfile(profile, y) {
+    for (var i = 1; i < profile.length; i++) {
+      var top = profile[i];
+      if (y > top[0]) continue;
+      var bottom = profile[i - 1];
+      var mix = Math.max(0, (y - bottom[0]) / (top[0] - bottom[0]));
+      return bottom.slice(1).map(function (value, j) {
+        return value + (top[j + 1] - value) * mix;
+      });
+    }
+    return profile[profile.length - 1].slice(1);
+  }
+
+  function profileMesh(profile, rows, material, thickness, opening) {
+    var columns = 32;
+    var open = opening > 0;
+    var count = open ? columns + 1 : columns;
+    var positions = [];
+    var indices = [];
+    rows.forEach(function (row, i) {
+      for (var j = 0; j < count; j++) {
+        var angle = opening + (Math.PI * 2 - opening * 2) * j / columns;
+        var y = typeof row === 'function' ? row(angle) : row;
+        var radii = sampleProfile(profile, y);
+        var padding = radii[0] ? thickness : 0;
+        positions.push((radii[0] + padding) * Math.sin(angle), y,
+          radii[2] + (radii[1] + padding) * Math.cos(angle));
+        if (i === 0 || (open && j === columns)) continue;
+        var next = open ? j + 1 : (j + 1) % columns;
+        var a = (i - 1) * count + j;
+        var b = (i - 1) * count + next;
+        indices.push(a, b, a + count, b, b + count, a + count);
+      }
+    });
+    var geometry = new THREE.BufferGeometry();
+    geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+    geometry.setIndex(indices);
+    if (Array.isArray(material)) {
+      // 领口和下摆与衣服共用顶点，避免两层表面相互穿插。
+      var band = columns * 6;
+      var body = (rows.length - 3) * band;
+      geometry.addGroup(0, band, 1);
+      geometry.addGroup(band, body, 0);
+      geometry.addGroup(band + body, band, 1);
+    }
+    geometry.computeVertexNormals();
+    return mesh(geometry, material);
+  }
+
+  function profileRows(profile) {
+    return profile.map(function (row) { return row[0]; });
+  }
+
+  function oval(x, y, z, material) {
+    var shape = sphere(1, material, 16);
+    shape.scale.set(x, y, z);
+    return shape;
+  }
+
+  function buildPortraitTorso(opts) {
+    var g = new THREE.Group();
+    g.position.y = 1.06;
+    var palette = opts.palette;
+    var chest = opts.jacket ? 0.39 : 0.414;
+    var profile = [
+      [-0.115, 0, 0, 0], [-0.08, 0.28, 0.19, 0], [0.11, 0.292, 0.207, 0.014],
+      [0.28, 0.32, 0.216, 0.012], [0.45, chest, 0.228, 0.014],
+      [0.57, chest - 0.005, 0.194, 0], [0.64, 0.305, 0.156, -0.012],
+      [0.705, 0.114, 0.092, -0.012], [0.71, 0, 0, -0.012],
+    ];
+    var hips = profileMesh(profile, [-0.115, -0.08, 0.087], palette.pants, 0.003, 0);
+    g.add(hips);
+    var torsoRows = profileRows(profile).slice(2);
+    torsoRows.unshift(0.058);
+
+    if (opts.jacket) {
+      var shirt = portraitColor(0xd4c6b4);
+      g.add(profileMesh(profile, torsoRows, shirt, 0, 0));
+      function collar(angle) { return 0.639 - 0.105 * Math.pow(Math.max(0, Math.cos(angle)), 3); }
+      var jacket = profileMesh(profile, [
+        0.057, 0.113, 0.28, 0.45,
+        function (angle) { return collar(angle) - 0.048; }, collar,
+      ], [palette.outfit, palette.binding], 0.028, 0.32);
+      jacket.userData.toonOutline = true;
+      g.add(jacket);
+    } else {
+      g.add(profileMesh(profile, torsoRows, palette.skin, 0, 0));
+      function neckline(angle) {
+        var front = Math.max(0, Math.cos(angle));
+        return 0.574 + 0.078 * Math.pow(Math.abs(Math.sin(angle)), 4) - 0.098 * front * front;
+      }
+      var vest = profileMesh(profile, [
+        0.062, 0.086, 0.11, 0.28, 0.43,
+        function (angle) { return neckline(angle) - 0.022; }, neckline,
+      ], [palette.outfit, palette.binding], 0.025, 0);
+      vest.userData.toonOutline = true;
+      g.add(vest);
+    }
+    return g;
+  }
+
+  function buildPortraitHead(opts) {
+    var group = new THREE.Group();
+    group.position.y = 1.825;
+    var palette = opts.palette;
+    var width = opts.jacket ? 0.246 : 0.281;
+    var profile = [
+      [-0.162, 0, 0, 0.061], [-0.128, width * 0.63, 0.139, 0.051],
+      [-0.06, width * 0.91, 0.191, 0.03], [0.055, width, 0.222, 0.014],
+      [0.167, width * 0.98, 0.229, -0.003], [0.261, width * 0.92, 0.213, -0.017],
+      [0.34, width * 0.79, 0.175, -0.023], [0.384, width * 0.52, 0.118, -0.021],
+      [0.419, 0, 0, -0.019],
+    ];
+    var skull = profileMesh(profile, profileRows(profile), palette.skin, 0, 0);
+    skull.userData.toonOutline = true;
+    group.add(skull);
+
+    function hairline(angle) {
+      var front = Math.max(0, Math.cos(angle));
+      var side = Math.abs(Math.sin(angle));
+      return 0.161 + 0.155 * Math.pow(front, 0.65) + 0.023 * side
+        - (opts.jacket ? 0.044 : 0.022) * Math.pow(side, 8);
+    }
+    var hair = profileMesh(profile, [
+      hairline, function (angle) { return (hairline(angle) * 2 + 0.34) / 3; },
+      function (angle) { return (hairline(angle) + 0.68) / 3; },
+      0.34, 0.384, 0.431,
+    ], palette.hair, opts.jacket ? 0.027 : 0.02, 0);
+    group.add(hair);
+
+    function frontZ(x, y) {
+      var s = sampleProfile(profile, y);
+      return s[2] + s[1] * Math.sqrt(Math.max(0, 1 - x * x / (s[0] * s[0])));
+    }
+    function feature(part, x, y, offset) {
+      part.position.set(x, y, frontZ(x, y) + offset);
+      group.add(part);
+      return part;
+    }
+    var c = {};
+    [-1, 1].forEach(function (side) {
+      var name = side < 0 ? 'L' : 'R';
+      var ear = oval(0.05, 0.078, 0.051, palette.skin);
+      ear.position.set(side * (width - 0.007), 0.075, -0.022);
+      ear.rotation.z = -side * 0.16;
+      group.add(ear);
+      var inner = oval(0.027, 0.049, 0.017, palette.warm);
+      inner.position.set(side * (width + 0.013), 0.075, 0.017);
+      group.add(inner);
+
+      var x = side * 0.104;
+      var eye = new THREE.Group();
+      eye.add(oval(0.047, opts.jacket ? 0.025 : 0.032, 0.013, palette.hair));
+      var white = oval(0.041, opts.jacket ? 0.018 : 0.025, 0.011, M.eyeWhite);
+      white.position.z = 0.008;
+      eye.add(white);
+      var iris = oval(0.016, 0.019, 0.008, M.eyeIris);
+      iris.position.set(-side * 0.004, 0, 0.016);
+      eye.add(iris);
+      var light = oval(0.005, 0.006, 0.003, M.glow);
+      light.position.set(0.002, 0.007, 0.024);
+      eye.add(light);
+      c['eye' + name] = feature(eye, x, 0.148, 0.004);
+      c['brow' + name] = feature(oval(0.055, 0.012, 0.013, palette.hair), x, 0.204, 0.009);
+
+      c['blush' + name] = feature(oval(0.024, 0.009, 0.005, palette.warm), side * 0.168, 0.04, 0.004);
+      c['blush' + name].rotation.y = side * 0.55;
+    });
+    feature(oval(0.039, 0.06, 0.034, palette.skin), 0, 0.096, 0.016);
+    feature(oval(0.048, 0.031, 0.031, palette.skin), 0, 0.058, 0.034);
+    c.mouthClosed = feature(oval(0.064, 0.009, 0.012, M.mouth), 0, -0.047, 0.005);
+    c.mouthOpen = feature(oval(0.056, 0.038, 0.016, M.mouthDark), 0, -0.043, 0.007);
+    c.mouthSmirk = feature(oval(0.061, 0.014, 0.012, M.mouth), 0.011, -0.046, 0.008);
+    c.mouthSmirk.rotation.z = 0.2;
+    c.sweat = feature(oval(0.015, 0.027, 0.008, M.sweat), 0.183, 0.218, 0.009);
+    return { group: group, face: null, controls: c };
+  }
+
   function makeKnife() {
     var g = new THREE.Group();
     var handle = mesh(new THREE.CylinderGeometry(0.025, 0.022, 0.22, 8), M.wood);
@@ -393,20 +590,27 @@ window.Runners = (function () {
     function addLeg(x) {
       var legG = new THREE.Group();
       legG.position.set(x, 0.88, 0);
-      var thigh = capsule(0.38, 0.13, 0.095, M.pants, 10);
+      var pants = opts.palette ? opts.palette.pants : M.pants;
+      var thigh = opts.palette
+        ? capsule(0.38, opts.jacket ? 0.13 : 0.147, 0.103, pants, 12)
+        : capsule(0.38, 0.13, 0.095, pants, 10);
       thigh.position.y = -0.19;
       legG.add(thigh);
       var knee = new THREE.Group();
       knee.position.y = -0.38;
-      var shin = capsule(0.36, 0.085, 0.062, M.pants, 10);
+      var shin = opts.palette ? capsule(0.36, 0.096, 0.071, pants, 12) : capsule(0.36, 0.085, 0.062, pants, 10);
       shin.position.y = -0.18;
       knee.add(shin);
       var foot = new THREE.Group();
       foot.position.y = -0.36;
-      var shoe = roundBox(0.24, 0.14, 0.4, { mat: M.shoe, r: 0.05 });
+      var shoe = opts.palette
+        ? roundBox(0.23, 0.33, 0.13, { mat: opts.palette.shoes, r: 0.046 })
+        : roundBox(0.24, 0.14, 0.4, { mat: M.shoe, r: 0.05 });
       shoe.position.set(0, -0.06, 0.04);
       foot.add(shoe);
-      var sole = roundBox(0.22, 0.05, 0.37, { mat: M.sole, r: 0.015 });
+      var sole = opts.palette
+        ? roundBox(0.235, 0.35, 0.031, { mat: opts.palette.sole, r: 0.012 })
+        : roundBox(0.22, 0.05, 0.37, { mat: M.sole, r: 0.015 });
       sole.position.set(0, -0.135, 0.04);
       foot.add(sole);
       knee.add(foot);
@@ -418,8 +622,9 @@ window.Runners = (function () {
     function addArm(x) {
       var arm = new THREE.Group();
       arm.position.set(x, 1.72, 0);
-      var sleeve = opts.jacket ? M.jacket : opts.shirt ? M.shirtDark : M.skin;
-      var upper = capsule(0.42, 0.13, 0.095, sleeve, 10);
+      var skin = opts.palette ? opts.palette.skin : M.skin;
+      var sleeve = opts.jacket ? opts.palette.outfit : opts.shirt ? M.shirtDark : skin;
+      var upper = capsule(0.42, opts.palette && opts.jacket ? 0.115 : 0.13, 0.095, sleeve, 10);
       upper.position.y = -0.21;
       arm.add(upper);
       var elbow = new THREE.Group();
@@ -427,9 +632,20 @@ window.Runners = (function () {
       var fore = capsule(0.34, 0.085, 0.06, sleeve, 10);
       fore.position.y = -0.17;
       elbow.add(fore);
-      var hand = roundBox(0.16, 0.15, 0.17, { mat: M.skin, r: 0.05 });
+      var hand = opts.palette ? mesh(new THREE.SphereGeometry(1, 12, 8).scale(0.069, 0.098, 0.063), skin)
+        : roundBox(0.16, 0.15, 0.17, { mat: skin, r: 0.05 });
       hand.position.set(0, -0.34, 0.03);
       elbow.add(hand);
+      if (opts.palette) {
+        var thumb = oval(0.024, 0.048, 0.034, skin);
+        thumb.position.set(x < 0 ? 0.055 : -0.055, -0.016, 0.04);
+        hand.add(thumb);
+        if (opts.jacket) {
+          var cuff = mesh(new THREE.CylinderGeometry(0.068, 0.064, 0.105, 12), opts.palette.binding);
+          cuff.position.y = -0.276;
+          elbow.add(cuff);
+        }
+      }
       elbow.rotation.x = 0.18;
       arm.add(elbow);
       elbows.push(elbow);
@@ -442,19 +658,20 @@ window.Runners = (function () {
     g.add(leftLeg);
     g.add(rightLeg);
 
-    var torsoG = buildTorso(opts);
+    var torsoG = opts.palette ? buildPortraitTorso(opts) : buildTorso(opts);
     g.add(torsoG);
 
-    var neck = capsule(0.18, 0.09, 0.1, M.skin, 8);
+    var neck = capsule(0.18, 0.09, 0.1, opts.palette ? opts.palette.skin : M.skin, 8);
     neck.position.y = 1.63;
     g.add(neck);
 
-    var headInfo = buildHead(opts);
+    var headInfo = opts.palette ? buildPortraitHead(opts) : buildHead(opts);
     g.add(headInfo.group);
     applyExpression(headInfo.controls, opts.face || 'haoge');
 
-    var leftArmInfo = addArm(-0.5);
-    var rightArmInfo = addArm(0.5);
+    var shoulder = opts.palette ? 0.443 : 0.5;
+    var leftArmInfo = addArm(-shoulder);
+    var rightArmInfo = addArm(shoulder);
     g.add(leftArmInfo.arm);
     g.add(rightArmInfo.arm);
 
@@ -480,6 +697,7 @@ window.Runners = (function () {
       knees: knees,
       faceControls: headInfo.controls,
     };
+    if (opts.palette && window.RunnerToon) window.RunnerToon.apply(g);
     return g;
   }
 
@@ -857,10 +1075,10 @@ window.Runners = (function () {
 
   return {
     createHaoGe: function () {
-      return makeRunner({ face: 'haoge', hair: 'short' });
+      return makeRunner({ face: 'haoge', palette: portraitMaterials.haoge });
     },
     createHuaQiang: function () {
-      var r = makeRunner({ face: 'huaqiang', hair: 'flat', jacket: true, cigarette: true, knife: true });
+      var r = makeRunner({ face: 'huaqiang', jacket: true, knife: true, palette: portraitMaterials.huaqiang });
       r.scale.set(1.12, 1.12, 1.12);
       return r;
     },

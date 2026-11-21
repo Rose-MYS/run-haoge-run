@@ -23,4 +23,7 @@
 
 玩法数值位于 `js/config.js`，程序化角色位于 `js/characters.js`，主循环和玩法逻辑位于 `js/game.js`。
 
+本次更新细化了程序化角色的外观，并加入刘华强精修模型的骨骼迁移工具和动作接入代码。
+拥有完整本地资产时，可在 GLB 开发入口通过 `?chaser=refined` 试玩，或在单文件构建命令后加 `--huaqiang-refined`。
+
 本仓库提供可玩的源码快照。本地项目中的脸部贴图、GLB 模型、录音、参考素材和安装包由作者在本机管理。Three.js 的第三方许可见 [MIT 许可](js/vendor/THREE-LICENSE.txt)。

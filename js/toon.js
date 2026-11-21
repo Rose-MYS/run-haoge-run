@@ -47,14 +47,21 @@ window.RunnerToon = (function () {
       shader.vertexShader = 'uniform float runnerOutlineWidth;\n' + shader.vertexShader.replace(
         '#include <project_vertex>',
         '#include <project_vertex>\n' +
-        'mvPosition.xyz -= normalize(transformedNormal) * runnerOutlineWidth;\n' +
+        '#ifdef USE_SKINNING\n' +
+        'vec3 outlineNormal = -transformedNormal;\n' +
+        '#else\n' +
+        'vec3 outlineNormal = normalMatrix * normal;\n' +
+        '#endif\n' +
+        'mvPosition.xyz += outlineNormal * (runnerOutlineWidth / max(length(outlineNormal), 0.00001));\n' +
         'gl_Position = projectionMatrix * mvPosition;'
       );
     };
-    var outline = new THREE.SkinnedMesh(mesh.geometry, material);
-    outline.bindMode = mesh.bindMode;
-    outline.bind(mesh.skeleton, mesh.bindMatrix);
-    // 绘制描边时保留场景景深，动画与主模型共用骨骼。
+    var outline = new (mesh.isSkinnedMesh ? THREE.SkinnedMesh : THREE.Mesh)(mesh.geometry, material);
+    if (mesh.isSkinnedMesh) {
+      outline.bindMode = mesh.bindMode;
+      outline.bind(mesh.skeleton, mesh.bindMatrix);
+    }
+    // 描边进入同一景深测试，随原网格运动。
     outline.renderOrder = 1;
     outline.frustumCulled = false;
     mesh.add(outline);
@@ -62,16 +69,22 @@ window.RunnerToon = (function () {
 
   function apply(model) {
     var meshes = [];
+    var converted = new Map();
+    function convert(material) {
+      if (material.isMeshBasicMaterial || material.isMeshToonMaterial) return material;
+      if (!converted.has(material)) converted.set(material, toonMaterial(material));
+      return converted.get(material);
+    }
     model.traverse(function (mesh) {
       if (mesh.isMesh && mesh.material) meshes.push(mesh);
     });
     meshes.forEach(function (mesh) {
       var materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
-      var canOutline = mesh.isSkinnedMesh && mesh.geometry.getAttribute('normal') &&
+      var canOutline = (mesh.isSkinnedMesh || mesh.userData.toonOutline) && mesh.geometry.getAttribute('normal') &&
         materials.every(function (m) { return m && !m.transparent && !m.alphaTest; });
       mesh.material = Array.isArray(mesh.material)
-        ? materials.map(toonMaterial)
-        : toonMaterial(mesh.material);
+        ? materials.map(convert)
+        : convert(mesh.material);
       if (canOutline) addOutline(mesh);
     });
   }

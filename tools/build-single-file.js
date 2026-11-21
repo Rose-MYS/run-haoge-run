@@ -3,9 +3,15 @@ const path = require('path');
 
 const root = path.resolve(__dirname, '..');
 const htmlPath = path.join(root, 'index.html');
-const outputArg = process.argv[2];
+const args = process.argv.slice(2);
+const refinedChaser = args.includes('--huaqiang-refined');
+const [outputArg, modelArg] = args.filter(arg => arg !== '--huaqiang-refined');
 const outPath = outputArg ? path.resolve(outputArg) : path.join(root, 'dist', '郝哥快跑.html');
-const haogeModel = process.argv[3] ? path.resolve(process.argv[3]) : null;
+const procedural = modelArg === '--procedural';
+const haogeModel = modelArg && !procedural ? path.resolve(modelArg) : null;
+if (procedural && refinedChaser) {
+  throw new Error('--huaqiang-refined requires the GLB build');
+}
 
 function dataUrl(assetPath, mimeType) {
   const file = assetPath === 'assets/models/haoge.glb' && haogeModel
@@ -17,6 +23,12 @@ function dataUrl(assetPath, mimeType) {
 
 let html = fs.readFileSync(htmlPath, 'utf8');
 const sourceOnly = html.includes('window.HAOGE_SOURCE_ONLY = true');
+if (sourceOnly && refinedChaser) {
+  throw new Error('--huaqiang-refined requires the full local game assets and GLB-enabled entry');
+}
+if (procedural) {
+  html = html.replace('<script src="js/vendor/three.min.js', '<script>window.HAOGE_PROCEDURAL_CHARACTERS = true;</script>\n$&');
+}
 
 html = html.replace(/<link rel="stylesheet" href="css\/style\.css">/, () => {
   const css = fs.readFileSync(path.join(root, 'css', 'style.css'), 'utf8');
@@ -33,9 +45,13 @@ html = html.replace(/<script src="([^"]+)"><\/script>/g, (m, src) => {
       return "registerVoice(" + name + ", '" + dataUrl('assets/audio/' + file, 'audio/mpeg') + "'" + (stack || '') + ")";
     });
   }
-  if (!sourceOnly && file === 'js/models.js') {
+  if (!sourceOnly && !procedural && file === 'js/models.js') {
     js = js.replace(/'(assets\/models\/(?:haoge|subway_player1)\.glb)'/g, (match, asset) =>
       "'" + dataUrl(asset, 'model/gltf-binary') + "'");
+    if (refinedChaser) {
+      js = js.replace(/'(assets\/models\/huaqiang-refined\.glb)'/, (match, asset) =>
+        "'" + dataUrl(asset, 'model/gltf-binary') + "'");
+    }
     js = js.replace(/'(assets\/textures\/haoge-face\.png)\?v=\d+'/g, (match, asset) =>
       "'" + dataUrl(asset, 'image/png') + "'");
   }

@@ -2,6 +2,7 @@ window.RunnerModels = (function () {
   'use strict';
 
   var DEFAULT_MODEL_URL = 'assets/models/subway_player1.glb';
+  var REFINED_CHASER_URL = 'assets/models/huaqiang-refined.glb';
   var MODEL_URLS = {
     haoge: 'assets/models/haoge.glb',
     huaqiang: DEFAULT_MODEL_URL,
@@ -10,7 +11,11 @@ window.RunnerModels = (function () {
   };
   var fromFile = location.protocol === 'file:';
   var modelsEmbedded = MODEL_URLS.haoge.indexOf('data:') === 0;
-  var toonPreview = new URLSearchParams(location.search).get('style') === 'toon';
+  var params = new URLSearchParams(location.search);
+  var toonPreview = params.get('style') === 'toon';
+  var refinedChaser = params.get('chaser') === 'refined' || REFINED_CHASER_URL.indexOf('data:') === 0;
+  var proceduralPreview = window.HAOGE_SOURCE_ONLY || window.HAOGE_PROCEDURAL_CHARACTERS ||
+    params.get('models') === 'procedural';
 
   // —— 开发期郝哥模型切换（临时调试用，定稿后可删除本段 + setHaogePack 相关导出）——
   var HAOGE_PACKS = [
@@ -36,13 +41,14 @@ window.RunnerModels = (function () {
   }
   function primaryUrlFor(kind) {
     if (kind === 'haoge') return haogePackUrl();
+    if (kind === 'huaqiang' && refinedChaser) return REFINED_CHASER_URL;
     return MODEL_URLS[kind] || DEFAULT_MODEL_URL;
   }
 
   var loader = new THREE.GLTFLoader();
   var runners = [];
   var haogeFaceTex = null;
-  if (!window.HAOGE_SOURCE_ONLY && THREE.TextureLoader && (!fromFile || modelsEmbedded)) {
+  if (!proceduralPreview && THREE.TextureLoader && (!fromFile || modelsEmbedded)) {
     new THREE.TextureLoader().load('assets/textures/haoge-face.png?v=3', function (t) {
       haogeFaceTex = t;
       t.anisotropy = 4;
@@ -739,6 +745,61 @@ window.RunnerModels = (function () {
     };
   }
 
+  function buildRefinedChaser(model, scale, inv) {
+    var skin = model.getObjectByName('Huaqiang');
+    var restPose = [];
+    var body = { refinedChaser: true, hands: [] };
+    var delta = new THREE.Quaternion();
+    var local = new THREE.Quaternion();
+    var motion = new THREE.Euler();
+    model.updateMatrixWorld(true);
+
+    function control(key, name, drop) {
+      var bone = model.getObjectByName(name);
+      var pivot = new THREE.Group();
+      var parentAxes = bone.parent.getWorldQuaternion(new THREE.Quaternion());
+      restPose.push({
+        bone: bone,
+        rotation: bone.quaternion.clone(),
+        parentAxes: parentAxes,
+        inverseAxes: parentAxes.clone().invert(),
+        pivot: pivot,
+        drop: drop || 0,
+      });
+      body[key] = pivot;
+      return bone;
+    }
+
+    control('head', 'Head');
+    control('leftArm', 'LeftArm', -0.59);
+    control('rightArm', 'RightArm', 0.59);
+    control('leftLeg', 'LeftUpLeg');
+    control('rightLeg', 'RightUpLeg');
+    var hand = model.getObjectByName('RightHand');
+    var knife = makeKnife(scale, inv);
+    knife.position.set(0, 0.08, 0);
+    knife.rotation.x = 0.25;
+    knife.translateZ(0.13 * inv);
+    hand.add(knife);
+    body.knifeBlade = knife.userData.blade;
+    body.faceKind = 'huaqiang';
+    body.faceMorphs = skin.morphTargetInfluences;
+    body.applyManualPose = function () {
+      for (var i = 0; i < restPose.length; i++) {
+        var pose = restPose[i];
+        var angle = pose.pivot.rotation;
+        // Existing poses use runner-space angles. Apply them around the
+        // bind axes so the imported bones keep their original orientation.
+        motion.set(angle.x, angle.y, angle.z + pose.drop, 'XYZ');
+        delta.setFromEuler(motion);
+        local.copy(pose.inverseAxes).multiply(delta).multiply(pose.parentAxes);
+        pose.bone.quaternion.copy(local).multiply(pose.rotation);
+      }
+    };
+    body.applyManualPose();
+    return body;
+  }
+
   function calibrate(model, height) {
     var scale = height / BASE.height;
     model.scale.set(scale, scale, scale);
@@ -819,10 +880,6 @@ window.RunnerModels = (function () {
   }
 
   function loadGltf(kind, cb, fail) {
-    if (window.HAOGE_SOURCE_ONLY) {
-      if (fail) fail();
-      return;
-    }
     var urls = [];
     var primary = primaryUrlFor(kind);
     if (primary !== DEFAULT_MODEL_URL) urls.push(primary);
@@ -839,6 +896,17 @@ window.RunnerModels = (function () {
         return;
       }
       loader.load(url, function (gltf) {
+        var refinedMesh = url === REFINED_CHASER_URL && gltf.scene.getObjectByName('Huaqiang');
+        if (url === REFINED_CHASER_URL && (
+          !refinedMesh || !refinedMesh.isSkinnedMesh || !refinedMesh.morphTargetInfluences ||
+          !gltf.animations.some(function (clip) { return clip.name === 'run'; }) ||
+          !['Head', 'LeftArm', 'RightArm', 'LeftUpLeg', 'RightUpLeg', 'RightHand'].every(function (name) {
+            return !!findBone(gltf.scene, [name]);
+          })
+        )) {
+          next();
+          return;
+        }
         cb(gltf, url);
       }, undefined, function () {
         next();
@@ -848,7 +916,7 @@ window.RunnerModels = (function () {
   }
 
   function loadRunner(runner, kind, opts) {
-    if (!runner || (runner.userData && runner.userData.isGLB)) return;
+    if (proceduralPreview || !runner || (runner.userData && runner.userData.isGLB)) return;
     opts = opts || {};
     var height = opts.height || (KINDS[kind] && KINDS[kind].height) || 2.2;
     var runnerScale = runner.scale.x || 1;
@@ -858,6 +926,8 @@ window.RunnerModels = (function () {
     loadGltf(kind, function (gltf, usedUrl) {
       var model = gltf.scene;
       var pure = !!usedUrl && kind === 'haoge' && usedUrl === primaryUrlFor('haoge');
+      var approved = kind === 'huaqiang' && usedUrl === REFINED_CHASER_URL;
+      var previous = runner.userData;
       var sprites = [];
       for (var i = runner.children.length - 1; i >= 0; i--) {
         var child = runner.children[i];
@@ -868,12 +938,14 @@ window.RunnerModels = (function () {
           runner.remove(child);
         }
       }
-      var scale = pure
+      var scale = pure || approved
         ? calibrateDynamic(model, height / runnerScale)
         : calibrate(model, height / runnerScale);
       runner.add(model);
       var inv = 100 / (scale * runnerScale);
-      var body = buildBody(runner, model, kind, scale, inv, pure);
+      var body = approved
+        ? buildRefinedChaser(model, scale, inv / 100)
+        : buildBody(runner, model, kind, scale, inv, pure);
       if (pure) {
         applyHaogeMaterials(model);
         if (toonPreview && window.RunnerToon) window.RunnerToon.apply(model);
@@ -896,6 +968,13 @@ window.RunnerModels = (function () {
       body.model = model;
       body.hiddenBones = body.hiddenBones || [];
       runner.userData = body;
+      if (approved && previous) {
+        if (previous.faceKind) setFace(runner, previous.faceKind);
+        var previousBlade = previous.knifeBlade;
+        if (previousBlade && previousBlade.material === previousBlade.userData.bloodMat) {
+          setBloodyKnife(runner, true);
+        }
+      }
       if (oldHammer && body.elbows && body.elbows[1]) {
         body.elbows[1].add(oldHammer);
         body.hammer = oldHammer;
@@ -914,8 +993,10 @@ window.RunnerModels = (function () {
 
   function setFace(runner, kind) {
     var u = runner && runner.userData;
-    if (!u || !u.isGLB || !u.faceMesh) return;
+    if (!u || !u.isGLB) return;
     u.faceKind = kind;
+    if (u.faceMorphs) u.faceMorphs[0] = kind === 'huaqiang-smirk' ? 1 : 0;
+    if (!u.faceMesh) return;
     u.faceMesh.material.map = (kind === 'haoge' && haogeFaceTex) ? haogeFaceTex : faceTexture(kind);
     u.faceMesh.material.transparent = kind === 'haoge' && !!haogeFaceTex;
     u.faceMesh.material.alphaTest = kind === 'haoge' && haogeFaceTex ? 0.05 : 0;
@@ -954,6 +1035,7 @@ window.RunnerModels = (function () {
     for (var i = 0; i < runners.length; i++) {
       var u = runners[i].userData;
       if (u && u.mixer) u.mixer.update(dt);
+      if (u && u.applyManualPose && !u.currentAction) u.applyManualPose();
       if (u && u.hiddenBones) {
         for (var h = 0; h < u.hiddenBones.length; h++) u.hiddenBones[h].scale.setScalar(0.0001);
       }

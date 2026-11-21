@@ -1,7 +1,6 @@
 /* ============================================================
  * 开发期郝哥模型切换开关（临时调试用，定稿后可整文件删除）
- * - 只切换「郝哥」的 GLB 模型包（models.js 内 HAOGE_PACKS），
- *   不动华强/小弟/大妈与任何玩法逻辑。
+ * - 可切换郝哥 GLB 模型包，以及独立预览表现层方案。
  * - 选择后点击“应用并刷新”，刷新后进入游戏对比即可；
  *   localStorage 键：haogeModelPack。
  * ============================================================ */
@@ -94,6 +93,15 @@
     actions.appendChild(btnReset);
     var styleUrl = new URL(location.href);
     var toon = styleUrl.searchParams.get('style') === 'toon';
+    var procedural = styleUrl.searchParams.get('models') === 'procedural';
+    var refinedChaser = styleUrl.searchParams.get('chaser') === 'refined';
+    var btnCharacters = document.createElement('button');
+    btnCharacters.textContent = procedural ? '返回 GLB 模型' : '预览新角色';
+    btnCharacters.addEventListener('click', function () {
+      if (procedural) styleUrl.searchParams.delete('models');
+      else styleUrl.searchParams.set('models', 'procedural');
+      location.href = styleUrl.href;
+    });
     var btnStyle = document.createElement('button');
     btnStyle.textContent = toon ? '切回现行材质' : '预览郝哥 toon';
     btnStyle.addEventListener('click', function () {
@@ -101,7 +109,21 @@
       else styleUrl.searchParams.set('style', 'toon');
       location.href = styleUrl.href;
     });
+    var btnChaser = document.createElement('button');
+    btnChaser.textContent = refinedChaser ? '切回旧版华强' : '试玩精修版华强';
+    btnChaser.addEventListener('click', function () {
+      if (refinedChaser) styleUrl.searchParams.delete('chaser');
+      else styleUrl.searchParams.set('chaser', 'refined');
+      location.href = styleUrl.href;
+    });
     actions.appendChild(btnStyle);
+    actions.appendChild(btnCharacters);
+    actions.appendChild(btnChaser);
+    if (procedural) {
+      title.textContent = '程序化角色预览';
+      note.textContent = '开跑查看郝哥和华强的新外观。';
+      body.hidden = btnApply.hidden = btnReset.hidden = btnStyle.hidden = btnChaser.hidden = true;
+    }
 
     var chosen = active;
     function mark(id) {
