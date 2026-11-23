@@ -4703,7 +4703,7 @@
       }
       var vm = $('voiceModal');
       if (vm && !vm.classList.contains('hidden')) {
-        hide('voiceModal');
+        vm.classList.add('hidden');
         return;
       }
       if (S.mode === 'playing' || S.mode === 'paused') togglePause();
@@ -4899,12 +4899,16 @@
 
   function openVoiceModal() {
     renderVoiceList();
-    show('voiceModal');
+    var vm = $('voiceModal');
+    if (vm) vm.classList.remove('hidden');
   }
 
   if ($('voiceBtn')) $('voiceBtn').addEventListener('click', openVoiceModal);
   if ($('pauseVoiceBtn')) $('pauseVoiceBtn').addEventListener('click', openVoiceModal);
-  if ($('voiceClose')) $('voiceClose').addEventListener('click', function () { hide('voiceModal'); });
+  if ($('voiceClose')) $('voiceClose').addEventListener('click', function () {
+    var vm = $('voiceModal');
+    if (vm) vm.classList.add('hidden');
+  });
   if ($('voiceResetAll')) {
     $('voiceResetAll').addEventListener('click', function () {
       if (window.AppAudio && window.AppAudio.resetAllCustomVoices) {
