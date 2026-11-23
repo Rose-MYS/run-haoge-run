@@ -1,0 +1,379 @@
+.street-only {
+  display: none;
+}
+
+.chapter-only { display: none; }
+.street-campaign .chapter-only { display: block; }
+.street-campaign .chapter-legacy { display: none; }
+
+.street-campaign #startScreen .best-line,
+.street-campaign .hud-right > .hud-row,
+.street-campaign .hud-left > .hud-row { display: none; }
+
+.street-campaign #startScreen .subtitle { margin-bottom: 1.28rem; }
+
+.chapter-hud {
+  position: fixed;
+  z-index: 11;
+  top: 56px;
+  left: 50%;
+  width: min(315px, 54vw);
+  transform: translateX(-50%);
+  padding: .55rem .70rem .46rem;
+  border-left: 3px solid #e0ac67;
+  background: rgba(21, 39, 33, .94);
+  color: #f1e7c9;
+  pointer-events: none;
+}
+
+.chapter-hud h2 {
+  font-size: .89rem;
+  line-height: 1.25;
+  font-weight: 800;
+}
+
+.chapter-hud-row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: .15rem .65rem;
+  margin: .26rem 0 .35rem;
+  font-size: .75rem;
+}
+
+#chapterHudTime { font-variant-numeric: tabular-nums; }
+
+.street-campaign #chapterTurnGuide .street-turn {
+  position: static;
+  transform: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .2rem;
+  width: 100%;
+  min-height: 48px;
+  margin-top: 2px;
+  padding: 0;
+  border: 0;
+  background: none;
+  font-size: .79rem;
+}
+
+.street-campaign #chapterTurnGuide .street-turn-row { gap: .3rem; }
+.street-campaign #chapterTurnGuide .street-turn button {
+  margin: 0;
+  min-width: 0;
+  padding: .25rem .52rem;
+  white-space: nowrap;
+}
+
+.chapter-goal-done { color: #bdeb9e; }
+.chapter-hud progress {
+  display: block;
+  width: 100%;
+  height: 3px;
+  border: 0;
+  color: #e6b977;
+  accent-color: #e6b977;
+  background: #506558;
+}
+
+.chapter-hud progress::-webkit-progress-bar { background: #506558; }
+.chapter-hud progress::-webkit-progress-value { background: #e6b977; }
+
+.chapter-panel #chapterDetail {
+  margin: 0 auto 1.2rem;
+  max-width: 32ch;
+  line-height: 1.65;
+}
+
+.street-campaign #chapterScreen { z-index: 28; }
+
+.street-campaign .bubble {
+  top: 112px;
+  max-width: 85vw;
+  padding: .5rem .8rem;
+  font-size: clamp(14px, 2.4vw, 21px);
+  text-align: center;
+  white-space: normal;
+}
+
+.street-campaign .tip {
+  top: 165px;
+  padding: .4rem .66rem;
+  font-size: 13px;
+}
+
+.street-campaign .egg-toast {
+  inset: auto 14px 19px auto;
+  max-width: min(225px, 45vw);
+  padding: .46rem .62rem;
+  border: 1px solid #e0ac67;
+  border-radius: 2px;
+  background: #233d31;
+  color: #f7e9c6;
+  font-size: 12px;
+  transform: translateY(6px);
+}
+
+.street-campaign .egg-toast.show { transform: translateY(0); }
+
+.street-campaign .invuln-tag {
+  inset: auto 14px 62px auto;
+  border: 1px solid #edc784;
+  border-radius: 2px;
+  background: #3f3b29;
+  color: #f8e8c5;
+  animation: none;
+  transform: none;
+}
+
+@media (max-width: 600px) {
+  .chapter-hud {
+    top: 79px;
+    width: min(282px, 73vw);
+  }
+  .street-campaign .chase-wrap { top: 52px; width: min(200px, 62vw); }
+  .street-campaign .bubble { top: 147px; }
+  .street-campaign .tip { top: 200px; }
+}
+
+.street-ui {
+  --ink: #162925;
+  --paper: #e9dfbd;
+  --muted: #637264;
+  --seal: #aa3f27;
+  --lit: #f0b86f;
+  --glass: rgba(21, 39, 33, .91);
+  --display: "YouYuan", "STKaiti", "KaiTi", "Songti SC", serif;
+}
+
+.street-ui .street-only {
+  display: block;
+}
+
+.street-ui .screen {
+  background: rgba(10, 22, 19, .69);
+}
+
+.street-ui #startScreen {
+  justify-content: flex-start;
+  align-items: flex-end;
+  padding: 5vh 6vw 10vh;
+  background: linear-gradient(90deg, rgba(12, 29, 24, .69), transparent 72%);
+}
+
+.street-ui .panel {
+  width: min(480px, 92vw);
+  padding: clamp(20px, 4.5vw, 40px);
+  border: 1px solid #bfb188;
+  border-radius: 4px;
+  color: var(--ink);
+  background: var(--paper);
+  box-shadow: 0 16px 50px #0918127a;
+}
+
+.street-ui #startScreen .panel {
+  position: relative;
+  overflow: hidden;
+  text-align: left;
+  border-top: 5px solid var(--seal);
+  background:
+    repeating-linear-gradient(0deg, transparent 0 25px, #60523416 25px 26px),
+    var(--paper);
+}
+
+.street-ui .title {
+  color: var(--ink);
+  font-family: var(--display);
+  font-size: clamp(46px, 8vw, 78px);
+  font-weight: 900;
+  line-height: 1.05;
+  letter-spacing: -.075em;
+  text-shadow: 1px 1px 0 #aa9b6a;
+}
+
+.street-ui .subtitle {
+  width: fit-content;
+  margin: .68rem 0 1.25rem;
+  padding: .2rem .65rem .22rem;
+  color: #f4e8c7;
+  background: var(--seal);
+  font-size: clamp(14px, 3.8vw, 17px);
+  letter-spacing: .1em;
+  transform: rotate(-2deg);
+}
+
+.street-ui .best-line {
+  margin: 0 0 1rem;
+  color: #374e40;
+  font-size: .86rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.street-ui .btn {
+  min-height: 44px;
+  padding: .65rem 1.1rem;
+  border: 1px solid var(--ink);
+  border-radius: 2px;
+  background: var(--ink);
+  box-shadow: none;
+  color: #f8edcf;
+  font-size: 16px;
+  line-height: 1.2;
+}
+
+.street-ui #startBtn {
+  display: block;
+  width: 100%;
+  margin: 0 0 .68rem;
+  color: var(--paper);
+  background: var(--ink);
+  text-align: left;
+}
+
+.street-ui #startBtn::after {
+  content: '→';
+  float: right;
+  color: var(--lit);
+}
+
+.street-ui .btn-small,
+.street-ui .btn-ghost {
+  color: var(--ink);
+  background: transparent;
+}
+
+.street-ui .btn:active,
+.street-ui .btn:hover {
+  transform: none;
+  box-shadow: none;
+  border-color: var(--seal);
+}
+
+.street-ui .btn:disabled {
+  opacity: .5;
+  cursor: wait;
+}
+
+.street-ui button:focus-visible {
+  outline: 2px solid #d38b42;
+  outline-offset: 3px;
+}
+
+.street-ui .story-title,
+.street-ui .egg-title,
+.street-ui .help-title,
+.street-ui .over-title,
+.street-ui .pause-title {
+  font-family: var(--display);
+  color: var(--ink);
+  text-shadow: none;
+  letter-spacing: .03em;
+}
+
+.street-ui .help-panel { width: min(620px, 94vw); }
+.street-ui .egg-panel { width: min(580px, 94vw); }
+.street-ui .stat, .street-ui .egg-item, .street-ui .items {
+  border-radius: 2px;
+  border: 1px solid #a59871;
+  background: #f5eacf;
+  color: var(--ink);
+}
+
+.street-ui #hud {
+  align-items: flex-start;
+  color: #fff5db;
+  text-shadow: none;
+}
+
+.street-ui .hud-left {
+  padding: .50rem .75rem;
+  border-left: 3px solid var(--lit);
+  background: var(--glass);
+  font-variant-numeric: tabular-nums;
+}
+
+.street-ui .hud-score {
+  margin-bottom: .3rem;
+  color: #fff5db;
+  font-size: clamp(18px, 4.6vw, 23px);
+}
+
+.street-ui .hud-row {
+  color: #f0e3bf;
+  font-size: 12px;
+}
+
+.street-ui .hud-right > .hud-row {
+  width: fit-content;
+  margin-left: auto;
+  margin-bottom: .3rem;
+  padding: .22rem .48rem;
+  background: var(--glass);
+}
+
+.street-ui .chase-wrap {
+  border: 1px solid #ddd3ae52;
+  border-radius: 2px;
+  background: var(--glass);
+}
+
+.street-ui .icon-btn,
+.street-ui .skill-btn,
+.street-ui .skill-slot,
+.street-ui .skill-wrap,
+.street-ui .street-turn,
+.street-ui .tip,
+.street-ui .bubble {
+  border-radius: 2px;
+}
+
+.street-ui .icon-btn {
+  min-width: 44px;
+  min-height: 42px;
+  color: #f7e9c3;
+  background: var(--glass);
+  border-color: #d4c69d6f;
+}
+
+.street-ui .skill-wrap { background: var(--glass); }
+.street-ui .skill-btn { background: var(--lit); color: #222316; }
+.street-ui .bubble { background: var(--glass); color: #fff2d1; }
+.street-ui .bubble.big { background: var(--seal); }
+.street-ui .tip { background: var(--glass); }
+.street-ui .street-turn:not(.street-turn-ready):not(.street-turn-confirmed) { border-color: #d4c69d; }
+.street-ui .street-turn-help { display: block; }
+
+.street-load {
+  position: fixed;
+  z-index: 75;
+  top: max(12px, env(safe-area-inset-top));
+  left: 50%;
+  transform: translateX(-50%);
+  padding: .55rem .85rem;
+  width: max-content;
+  max-width: 90vw;
+  border-left: 3px solid #e3a86a;
+  background: #192e27;
+  color: #f3e6c6;
+  font-size: .9rem;
+}
+
+@media (max-width: 600px) {
+  .street-ui #startScreen {
+    justify-content: center;
+    padding: 0 0 max(11vh, 54px);
+    background: linear-gradient(0deg, #10221bd9, transparent 78%);
+  }
+  .street-ui #startScreen .panel { width: min(440px, 89vw); }
+  .street-ui #hud { padding: 9px; }
+  .street-ui .icon-btn { min-width: 42px; min-height: 40px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .street-ui *, .street-ui *::before, .street-ui *::after {
+    scroll-behavior: auto !important;
+    transition-duration: .01ms !important;
+  }
+}

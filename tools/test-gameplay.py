@@ -52,7 +52,7 @@ class Gameplay(unittest.TestCase):
         )
         cls.addClassCleanup(cls.browser.close)
 
-    def open_game(self, *, mobile=False):
+    def open_game(self, *, mobile=False, street=False):
         page = self.browser.new_page(
             offline=True,
             viewport={"width": 390, "height": 700} if mobile else {"width": 640, "height": 480},
@@ -64,7 +64,8 @@ class Gameplay(unittest.TestCase):
         page.on("pageerror", lambda error: errors.append(str(error)))
         self.addCleanup(lambda: self.assertEqual(errors, []))
         page.add_init_script(FRAME_CLOCK)
-        page.goto((ROOT / "index.html").as_uri() + "?seed=42")
+        sample = "&route=street" if street else ""
+        page.goto((ROOT / "index.html").as_uri() + "?seed=42&campaign=0" + sample)
         page.locator("#introSkip").click()
         return page
 
@@ -199,12 +200,67 @@ class Gameplay(unittest.TestCase):
         swipe(140, 500, 230, 500)
         advance(page, 5)
         self.assertGreater(page.evaluate("__gameDebug.player.position.x"), 0.3)
+        page.locator("#pauseBtn").tap()
+        self.assertTrue(page.locator("#pauseScreen").is_visible())
+        page.locator("#resumeBtn").tap()
         swipe(150, 510, 150, 425)
         advance(page, 4)
         self.assertGreater(page.evaluate("__gameDebug.player.position.y"), 0.3)
         swipe(150, 425, 150, 510)
         advance(page, 4)
         self.assertLess(page.evaluate("__gameDebug.player.position.y"), 0.1)
+
+    def test_street_turn_accepts_direction_and_penalizes_miss(self):
+        page = self.open_game(street=True)
+        page.locator("#startBtn").click()
+        page.evaluate("CONFIG.piguaChance = 0")
+        prompt = page.locator(".street-turn")
+        page.evaluate("__gameDebug.S.dist = 52")
+        advance(page)
+        self.assertIn("前方右转", prompt.inner_text())
+        self.assertTrue(prompt.locator(".street-turn-distance").is_visible())
+        self.assertFalse(prompt.get_by_role("button").is_visible())
+        self.assertTrue(page.evaluate("__gameDebug.scene.getObjectByName('StreetTurnMarkers').visible"))
+        page.evaluate("__gameDebug.S.dist = 68")
+        advance(page)
+        self.assertIn("现在确认右转", prompt.inner_text())
+        page.keyboard.press("ArrowRight")
+        advance(page)
+        self.assertIn("已确认右转", prompt.inner_text())
+        page.keyboard.press("ArrowRight")
+        advance(page, 7)
+        self.assertGreater(page.evaluate("__gameDebug.player.position.x"), 1)
+        page.evaluate("__gameDebug.S.dist = 82")
+        advance(page)
+        self.assertEqual(page.evaluate("__gameDebug.S.hitCount"), 0)
+        page.evaluate("__gameDebug.S.dist = 182")
+        advance(page)
+        self.assertEqual(page.evaluate("__gameDebug.S.hitCount"), 1)
+
+    def test_street_opening_blends_to_close_camera_while_running(self):
+        page = self.open_game(street=True)
+        page.locator("#startBtn").click()
+        state = "() => [__gameDebug.camera.position.z, __gameDebug.S.dist]"
+        advance(page, 12)
+        wide, start = page.evaluate(state)
+        self.assertGreater(wide, 12)
+
+        page.keyboard.press("ArrowRight")
+        advance(page, 45)
+        blending, midway = page.evaluate(state)
+        self.assertTrue(7.55 < blending < wide)
+        self.assertGreater(midway, start)
+        self.assertGreater(page.evaluate("__gameDebug.player.position.x"), 1)
+
+        advance(page, 26)
+        close, finish = page.evaluate(state)
+        self.assertAlmostEqual(close, 7.55)
+        self.assertGreater(finish, midway)
+
+        page.keyboard.press("Space")
+        page.locator("#pauseRestartBtn").click()
+        advance(page, 4)
+        self.assertGreater(page.evaluate(state)[0], 12)
 
 
 if __name__ == "__main__":

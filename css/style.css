@@ -831,3 +831,72 @@ html, body {
 .pause-actions .btn-small {
   padding: 11px 30px;
 }
+.street-turn {
+  position: fixed;
+  z-index: 12;
+  bottom: 15%;
+  left: 50%;
+  transform: translateX(-50%);
+  width: max-content;
+  max-width: calc(100vw - 32px);
+  min-width: 9.6rem;
+  padding: .56rem .75rem;
+  border: 1px solid rgba(239, 221, 183, .42);
+  border-radius: .35rem;
+  background: rgba(24, 26, 23, .91);
+  color: #fff4df;
+  font-size: clamp(.89rem, 3.8vw, 1.08rem);
+  text-align: center;
+  pointer-events: none;
+}
+
+.street-turn-row {
+  display: flex;
+  justify-content: center;
+  align-items: baseline;
+  gap: .6rem;
+}
+
+.street-turn-status { font-weight: 700; }
+.street-turn-distance {
+  color: #dbc9a9;
+  font-variant-numeric: tabular-nums;
+}
+
+.street-turn-controls {
+  margin-top: .34rem;
+  font-size: .83em;
+}
+
+.street-turn-swipe,
+.street-turn-help { display: none; }
+
+.street-turn-ready {
+  background: #243a29;
+  border-color: #b9ee8d;
+  color: #e7ffd3;
+}
+
+.street-turn-ready .street-turn-distance { color: #c7eab5; }
+.street-turn-confirmed { border-color: #83b57e; }
+.street-turn button {
+  pointer-events: auto;
+  touch-action: manipulation;
+  margin-top: .4rem;
+  min-height: 44px;
+  min-width: 6.25rem;
+  padding: .36rem .8rem;
+  border: 1px solid #c9f3a9;
+  border-radius: 3px;
+  background: #b9ee8d;
+  color: #1b2f21;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+@media (pointer: coarse) {
+  .street-turn { bottom: max(16%, env(safe-area-inset-bottom)); }
+  .street-turn-key { display: none; }
+  .street-turn-swipe { display: inline; }
+}

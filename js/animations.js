@@ -64,15 +64,22 @@ window.RunnerAnim = (function () {
     var action = pickAction(u.actions, clipName, name);
     if (!action) return false;
     var looping = name === 'run' || name === 'idle' || name === 'slide';
-    if (u.currentAction === clipName) {
-      action.play();
-    } else {
-      u.mixer.stopAllAction();
-      action.reset();
-      action.play();
+    var sampled = opts && typeof opts.at === 'number';
+    if (u.currentAction !== clipName) {
+      if (u.restoreRigPose) u.restoreRigPose();
+      var previous = u.activeAction;
+      if (opts && opts.blend && previous && previous !== action) {
+        action.reset().setEffectiveWeight(1).play().crossFadeFrom(previous, opts.blend, false);
+      } else {
+        u.mixer.stopAllAction();
+        action.reset().setEffectiveWeight(1).play();
+      }
       u.currentAction = clipName;
+      u.activeAction = action;
+    } else {
+      action.play();
     }
-    if (looping) {
+    if (looping && !sampled) {
       action.loop = THREE.LoopRepeat;
       action.clampWhenFinished = false;
     } else {
@@ -80,14 +87,24 @@ window.RunnerAnim = (function () {
       action.clampWhenFinished = true;
     }
     action.timeScale = (opts && opts.timeScale) || 1;
+    if (sampled) {
+      action.time = THREE.MathUtils.clamp(opts.at, 0, action.getClip().duration);
+      action.paused = true;
+    } else if (u.poseSampled) {
+      action.paused = false;
+    }
+    u.poseSampled = sampled;
     return true;
   }
 
   function freeze(runner) {
     var u = runner && runner.userData;
     if (u && u.mixer) {
+      if (u.restoreRigPose) u.restoreRigPose();
       u.mixer.stopAllAction();
       u.currentAction = null;
+      u.activeAction = null;
+      u.poseSampled = false;
     }
   }
 

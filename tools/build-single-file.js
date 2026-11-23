@@ -3,12 +3,19 @@ const path = require('path');
 
 const root = path.resolve(__dirname, '..');
 const htmlPath = path.join(root, 'index.html');
+let html = fs.readFileSync(htmlPath, 'utf8');
+const sourceOnly = html.includes('window.HAOGE_SOURCE_ONLY = true');
 const args = process.argv.slice(2);
-const refinedChaser = args.includes('--huaqiang-refined');
-const [outputArg, modelArg] = args.filter(arg => arg !== '--huaqiang-refined');
+const campaign = args.includes('--campaign');
+const refinedChaser = (!sourceOnly && campaign) || args.includes('--huaqiang-refined');
+const streetPreview = campaign || args.includes('--street-preview');
+const [outputArg, modelArg] = args.filter(arg => !['--huaqiang-refined', '--street-preview', '--campaign'].includes(arg));
 const outPath = outputArg ? path.resolve(outputArg) : path.join(root, 'dist', '郝哥快跑.html');
 const procedural = modelArg === '--procedural';
 const haogeModel = modelArg && !procedural ? path.resolve(modelArg) : null;
+if (sourceOnly && refinedChaser) {
+  throw new Error('--huaqiang-refined requires the full local game assets and GLB-enabled entry');
+}
 if (procedural && refinedChaser) {
   throw new Error('--huaqiang-refined requires the GLB build');
 }
@@ -21,17 +28,17 @@ function dataUrl(assetPath, mimeType) {
   return 'data:' + mimeType + ';base64,' + base64;
 }
 
-let html = fs.readFileSync(htmlPath, 'utf8');
-const sourceOnly = html.includes('window.HAOGE_SOURCE_ONLY = true');
-if (sourceOnly && refinedChaser) {
-  throw new Error('--huaqiang-refined requires the full local game assets and GLB-enabled entry');
-}
 if (procedural) {
   html = html.replace('<script src="js/vendor/three.min.js', '<script>window.HAOGE_PROCEDURAL_CHARACTERS = true;</script>\n$&');
 }
+if (streetPreview) {
+  const mode = campaign ? 'window.HAOGE_CAMPAIGN = true;' : 'window.HAOGE_STREET_PREVIEW = true;';
+  html = html.replace('<body>', campaign ? '<body class="street-ui street-campaign">' : '<body class="street-ui">');
+  html = html.replace('<script src="js/vendor/three.min.js', () => '<script>' + mode + '</script>\n<script src="js/vendor/three.min.js');
+}
 
-html = html.replace(/<link rel="stylesheet" href="css\/style\.css">/, () => {
-  const css = fs.readFileSync(path.join(root, 'css', 'style.css'), 'utf8');
+html = html.replace(/<link rel="stylesheet" href="(css\/(?:style|street-ui)\.css)(?:\?v=\d+)?">/g, (_tag, file) => {
+  const css = fs.readFileSync(path.join(root, file), 'utf8');
   return '<style>\n' + css + '\n</style>';
 });
 

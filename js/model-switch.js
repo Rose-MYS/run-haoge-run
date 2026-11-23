@@ -16,7 +16,8 @@
   }
 
   function build() {
-    if (window.HAOGE_SOURCE_ONLY) return;
+    if (window.HAOGE_SOURCE_ONLY || window.HAOGE_CAMPAIGN ||
+        new URLSearchParams(location.search).get('campaign') === '1') return;
     if (location.protocol !== 'http:' && location.protocol !== 'https:') return;
     var RM = window.RunnerModels;
     if (!RM || !RM.getHaogePacks || !RM.getActiveHaogePack) return;

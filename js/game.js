@@ -73,6 +73,13 @@
 
   /* ---------------- 基础 Three.js 设置 ---------------- */
   var coarsePointer = window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
+  var streetParams = new URLSearchParams(location.search);
+  var campaign = window.StreetCampaign &&
+    (window.HAOGE_CAMPAIGN || streetParams.get('campaign') === '1') ? window.StreetCampaign.create() : null;
+  var streetPreview = window.StreetRoute && window.StreetArt && (window.HAOGE_STREET_PREVIEW ||
+    campaign || streetParams.get('route') === 'street');
+  if (streetPreview) document.body.classList.add('street-ui');
+  if (campaign) document.body.classList.add('street-campaign');
   var renderer = new THREE.WebGLRenderer({ antialias: true });
   renderer.setSize(window.innerWidth, window.innerHeight);
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, coarsePointer ? 1.5 : 2));
@@ -90,7 +97,8 @@
   var fogColor = new THREE.Color(THEMES[0].fog);
   scene.fog = new THREE.Fog(fogColor, THEMES[0].fogNear, THEMES[0].fogFar);
 
-  var camera = new THREE.PerspectiveCamera(68, window.innerWidth / window.innerHeight, 0.1, 200);
+  var camera = new THREE.PerspectiveCamera(streetPreview ? 62 : 68,
+    window.innerWidth / window.innerHeight, 0.1, 200);
   camera.position.set(0, 7.4, 9.2);
 
   var ambient = new THREE.AmbientLight(0xffffff, THEMES[0].ambientIntensity);
@@ -98,7 +106,8 @@
   var hemi = new THREE.HemisphereLight(THEMES[0].hemiSky, THEMES[0].hemiGround, THEMES[0].hemiIntensity);
   scene.add(hemi);
   var sun = new THREE.DirectionalLight(THEMES[0].sun, THEMES[0].sunIntensity);
-  sun.position.set(8, 14, 6);
+  if (streetPreview) sun.position.set(8, 12, 5.5);
+  else sun.position.set(8, 14, 6);
   sun.castShadow = true;
   sun.shadow.mapSize.set(2048, 2048);
   sun.shadow.bias = -0.0005;
@@ -871,6 +880,11 @@
     respawnSideProp(sp);
   }
 
+  var streetRoute = streetPreview
+    ? window.StreetRoute.create(scene, track, sideProps, campaign ? campaign.stages : null, moveLane)
+    : null;
+  var streetItems = streetRoute && window.StreetItems;
+
   /* ---------------- 路边一家三口 ---------------- */
   var familyGroups = [];
 
@@ -949,7 +963,7 @@
     }
   }
 
-  for (var fi = 0; fi < 1; fi++) {
+  if (!campaign) {
     var fg = buildFamilyGroup();
     scene.add(fg);
     familyGroups.push(fg);
@@ -962,12 +976,12 @@
     c.width = 256;
     c.height = 96;
     var ctx = c.getContext('2d');
-    ctx.fillStyle = bg;
+    ctx.fillStyle = streetRoute ? (text === '华强' ? '#963f2d' : '#263e33') : bg;
     ctx.fillRect(0, 0, 256, 96);
-    ctx.strokeStyle = 'rgba(0,0,0,0.4)';
-    ctx.lineWidth = 8;
+    ctx.strokeStyle = streetRoute ? '#e4c18a' : 'rgba(0,0,0,0.4)';
+    ctx.lineWidth = streetRoute ? 4 : 8;
     ctx.strokeRect(4, 4, 248, 88);
-    ctx.fillStyle = fg;
+    ctx.fillStyle = streetRoute ? '#fff1d0' : fg;
     ctx.font = 'bold 60px "Microsoft YaHei", "SimHei", sans-serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
@@ -975,10 +989,12 @@
     var mat = new THREE.SpriteMaterial({
       map: new THREE.CanvasTexture(c),
       transparent: true,
-      depthTest: false,
+      depthTest: !!streetRoute,
+      sizeAttenuation: !streetRoute,
     });
     var sprite = new THREE.Sprite(mat);
     sprite.scale.set(1.5, 0.55, 1);
+    if (streetRoute) sprite.scale.set(.128, .048, 1);
     return sprite;
   }
 
@@ -1026,7 +1042,8 @@
 
   var player = new THREE.Group();
   var playerBody = new THREE.Group();
-  var haoGe = window.Runners.createHaoGe();
+  var cast = campaign && !window.HAOGE_SOURCE_ONLY ? window.StreetCast.create() : null;
+  var haoGe = cast ? cast.haoge : window.Runners.createHaoGe();
   haoGe.rotation.y = Math.PI; // 脸朝奔跑方向
   playerBody.add(haoGe);
   player.add(playerBody);
@@ -1040,7 +1057,7 @@
 
   var chaser = new THREE.Group();
   var chaserBody = new THREE.Group();
-  var huaQiang = window.Runners.createHuaQiang();
+  var huaQiang = cast ? cast.huaqiang : window.Runners.createHuaQiang();
   huaQiang.rotation.y = Math.PI; // 脸朝奔跑方向
   chaserBody.add(huaQiang);
   chaser.add(chaserBody);
@@ -1094,12 +1111,65 @@
   scooter.visible = false;
   scene.add(scooter);
 
-  // 精细模型替换：assets/ 下有 haoge.glb / huaqiang.glb 时自动加载
-  if (window.RunnerModels && window.RunnerModels.loadRunner) {
-    window.RunnerModels.loadRunner(haoGe, 'haoge', { height: 2.2 });
-    window.RunnerModels.loadRunner(huaQiang, 'huaqiang', { height: 2.5 });
-    window.RunnerModels.loadRunner(xiaoDiModel, 'xiaodi', { height: 2.15 });
-    window.RunnerModels.loadRunner(skillSidekick, 'xiaodi', { height: 2.15 });
+  var pendingStreetModels = 0;
+  var streetModelFallback = false;
+  var streetModelBlocked = false;
+  var streetModelRetry = false;
+  var startAfterModels = false;
+
+  function loadCharacters() {
+    var models = window.RunnerModels;
+    if (!models || !models.loadRunner) return;
+    var wait = streetRoute && models.usesGltf();
+    var status = document.getElementById('streetLoadStatus');
+    if (cast && !wait) {
+      streetModelBlocked = true;
+      haoGe.visible = huaQiang.visible = haogeTag.visible = huaqiangTag.visible = false;
+      el.startBtn.disabled = true;
+      status.hidden = false;
+      status.textContent = '请从分段逃脱离线成品或本地开发入口开始';
+      return;
+    }
+    if (wait) {
+      pendingStreetModels = 2;
+      haoGe.visible = huaQiang.visible = false;
+      haogeTag.visible = huaqiangTag.visible = false;
+      el.startBtn.disabled = true;
+      status.textContent = '正在准备角色…';
+      status.hidden = false;
+    }
+    function complete(ready) {
+      if (!ready) {
+        streetModelBlocked = streetModelRetry = true;
+        startAfterModels = false;
+        el.startBtn.disabled = false;
+        el.startBtn.textContent = '重新加载';
+        status.textContent = '角色模型未就绪，请重新加载';
+        return;
+      }
+      haoGe.visible = huaQiang.visible = true;
+      haogeTag.visible = huaqiangTag.visible = true;
+      el.startBtn.disabled = false;
+      status.hidden = !streetModelFallback;
+      status.textContent = streetModelFallback ? '部分模型加载失败，可用备用角色游玩' : '';
+      if (startAfterModels) startGame();
+    }
+    if (cast) {
+      cast.load(models, function (ready) {
+        pendingStreetModels = 0;
+        complete(ready);
+      });
+      return;
+    }
+    function settled(primary) {
+      if (!wait) return;
+      streetModelFallback = streetModelFallback || primary === false;
+      if (--pendingStreetModels === 0) complete(true);
+    }
+    models.loadRunner(haoGe, 'haoge', { height: 2.2, onSettled: settled });
+    models.loadRunner(huaQiang, 'huaqiang', { height: 2.5, onSettled: settled });
+    models.loadRunner(xiaoDiModel, 'xiaodi', { height: 2.15 });
+    models.loadRunner(skillSidekick, 'xiaodi', { height: 2.15 });
   }
 
   var P = {
@@ -1247,7 +1317,7 @@
   var bloodStain = new THREE.Mesh(new THREE.PlaneGeometry(0.3, 0.34), bloodStainMat);
   bloodStain.position.set(0, 0.95, 0.155);
   bloodStain.visible = false;
-  haoGe.add(bloodStain);
+  if (!campaign) haoGe.add(bloodStain);
   var bloodStainT = -1;
 
   var bloodJetMat = new THREE.MeshBasicMaterial({
@@ -1259,7 +1329,7 @@
   var bloodJet = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.2, CONFIG.bloodJetHeight, 10), bloodJetMat);
   bloodJet.position.set(0, 1.08 + CONFIG.bloodJetHeight / 2, 0.15);
   bloodJet.visible = false;
-  haoGe.add(bloodJet);
+  if (!campaign) haoGe.add(bloodJet);
 
   var bloodPoolMat = new THREE.MeshBasicMaterial({
     color: 0x8e1414,
@@ -1286,7 +1356,7 @@
   scene.add(bloodRing);
   var bloodRingT = 0;
 
-  var fxCard = window.Obstacles.createCert();
+  var fxCard = streetItems ? streetItems.cert() : window.Obstacles.createCert();
   fxCard.visible = false;
   scene.add(fxCard);
   var fxCardT = 0;
@@ -1361,7 +1431,7 @@
   piguaWarnSprite.visible = false;
   scene.add(piguaWarnSprite);
 
-  var OBSTACLE_FACTORIES = {
+  var OBSTACLE_FACTORIES = streetItems || {
     cart: window.Obstacles.createCart,
     pole: window.Obstacles.createPole,
     stall: window.Obstacles.createStall,
@@ -1386,8 +1456,9 @@
     o.position.y = 0;
     var u = o.userData;
     u.scareT = 0;
-    if (u.leftArm) u.leftArm.rotation.z = 0.35;
-    if (u.rightArm) u.rightArm.rotation.z = -0.35;
+    var restingArm = u.restingArm || .35;
+    if (u.leftArm) u.leftArm.rotation.z = restingArm;
+    if (u.rightArm) u.rightArm.rotation.z = -restingArm;
     if (u.head) {
       u.head.rotation.x = 0;
       u.head.rotation.z = 0;
@@ -1584,6 +1655,7 @@
   }
 
   function showEggToast(name) {
+    if (campaign) return;
     el.eggToast.textContent = '彩蛋解锁：' + name;
     if (eggToastTimer) {
       clearTimeout(eggToastTimer);
@@ -1644,6 +1716,7 @@
 
   // 道具介绍图标（程序绘制 PNG）
   function drawIcon(kind) {
+    if (streetItems) return streetItems.icon(kind);
     var c = document.createElement('canvas');
     c.width = c.height = 64;
     var x = c.getContext('2d');
@@ -1729,7 +1802,7 @@
   }
 
   function maybeTip(id, text) {
-    if (S.tipsShown[id] || S.mode !== 'playing') return;
+    if (campaign || S.tipsShown[id] || S.mode !== 'playing') return;
     S.tipsShown[id] = true;
     el.tipBox.textContent = text;
     el.tipBox.classList.remove('hidden');
@@ -1738,7 +1811,8 @@
   }
 
   function calcScore() {
-    return Math.floor(S.dist / CONFIG.distScoreDivisor) +
+    var distance = S.dist - (campaign ? campaign.stage().from : 0);
+    return Math.floor(distance / CONFIG.distScoreDivisor) +
       S.melons * CONFIG.melonScore +
       S.golds * CONFIG.goldMelonScore +
       S.certs * CONFIG.certScore;
@@ -1746,18 +1820,19 @@
 
   function updateHUD() {
     if (el.invulnTag) {
-      el.invulnTag.classList.toggle('hidden', !(P.invuln > 0 || S.skillT > 0));
+      el.invulnTag.classList.toggle('hidden', campaign || !(P.invuln > 0 || S.skillT > 0));
     }
     el.score.textContent = S.score;
     el.dist.textContent = Math.floor(S.dist);
     el.melons.textContent = S.melons;
-    el.speed.textContent = Math.floor(Math.min(CONFIG.maxSpeed, S.speed + (S.speedBoostT > 0 ? CONFIG.skillBoostSpeed : 0)));
+    el.speed.textContent = Math.floor(currentMoveSpeed(campaign && campaign.stage()));
     el.best.textContent = S.best;
     if (el.chaseFill) {
       var gapNorm = Math.max(0, Math.min(1, (S.gap - CONFIG.catchGap) / (CONFIG.startGap - CONFIG.catchGap)));
       el.chaseFill.style.width = Math.round(gapNorm * 100) + '%';
       el.chaseFill.style.background = S.gap > CONFIG.dangerGap ? '#4ade80' : (S.gap > CONFIG.catchGap + 0.8 ? '#facc15' : '#ef4444');
     }
+    if (campaign) campaign.updateHud(S);
   }
 
   function updateSkillHUD() {
@@ -2027,6 +2102,7 @@
 
   var bubbleTimerId = null;
   function showBubble(text, big) {
+    if (campaign) return;
     el.bubble.textContent = text;
     el.bubble.classList.toggle('big', !!big);
     el.bubble.classList.remove('hidden');
@@ -2171,7 +2247,9 @@
       radius = PIGUA.melon.geometry.parameters.radius;
     }
     PIGUA.melon.visible = false;
-    var pair = window.Obstacles.createSplitMelonPair(radius, PIGUA.melon.position);
+    var pair = streetItems
+      ? streetItems.split(radius, PIGUA.melon.position)
+      : window.Obstacles.createSplitMelonPair(radius, PIGUA.melon.position);
     PIGUA.parent.add(pair);
     var burst = window.Obstacles.createJuiceBurst(PIGUA.melon.position, 10);
     PIGUA.parent.add(burst);
@@ -2434,11 +2512,10 @@
   }
 
   function spawnPickup(kind, lane, z, y) {
-    var factory = kind === 'gold'
-      ? function () { return window.Obstacles.createMelon(true); }
-      : kind === 'cert'
-        ? window.Obstacles.createCert
-        : function () { return window.Obstacles.createMelon(false); };
+    var createMelon = streetItems ? streetItems.pickup : window.Obstacles.createMelon;
+    var factory = kind === 'cert'
+      ? (streetItems ? streetItems.cert : window.Obstacles.createCert)
+      : function () { return createMelon(kind === 'gold'); };
     var obj = poolGet(pickups, kind, factory);
     obj.userData.kind = kind;
     obj.position.set(CONFIG.lanes[lane], y, z);
@@ -2505,9 +2582,16 @@
   }
 
   function currentDrift() {
-    var d = CONFIG.tensionDrift + S.dist * CONFIG.tensionDriftGain;
+    var distance = campaign ? S.dist - campaign.stage().from : S.dist;
+    var d = CONFIG.tensionDrift + distance * CONFIG.tensionDriftGain;
     if (S.gap <= CONFIG.dangerGap) d += CONFIG.tensionDriftCloseBonus;
-    return Math.min(CONFIG.tensionDriftMax, d);
+    return Math.min(CONFIG.tensionDriftMax, d) * (campaign ? .6 : 1);
+  }
+
+  function currentMoveSpeed(chapter) {
+    var limit = chapter ? Math.min(CONFIG.maxSpeed, chapter.sprintSpeed) : CONFIG.maxSpeed;
+    var boost = S.speedBoostT > 0 ? CONFIG.skillBoostSpeed : 0;
+    return Math.min(limit, S.speed + boost);
   }
 
   function spawnTricycle(z) {
@@ -2518,6 +2602,7 @@
     obj.visible = true;
     obj.userData.slid = false;
     obj.userData.dir = spawnRandom() < 0.5 ? 1 : -1;
+    if (obj.userData.forward) obj.userData.forward.rotation.y = obj.userData.dir > 0 ? 0 : Math.PI;
     obj.userData.startX = -obj.userData.dir * CONFIG.tricycleSpan;
     obj.position.set(obj.userData.startX, 0, z);
     if (!S.seenKinds.tricycle) {
@@ -2690,8 +2775,9 @@
   }
 
   /* ---------------- 操作 ---------------- */
-  function moveLane(dir) {
+  function moveLane(dir, repeated) {
     if (S.mode !== 'playing' || P.mode === 'caught') return;
+    if (streetRoute && !repeated && streetRoute.input(dir, S.dist)) return;
     var nl = Math.max(0, Math.min(2, P.lane + dir));
     if (nl !== P.lane) {
       P.lane = nl;
@@ -2869,7 +2955,7 @@
         }
       } else if (kind === 'cert') {
         S.certs++;
-        maybeTip('cert', '保熟卡已到手！按 E 或点右下角按钮放大招');
+        maybeTip('cert', '保熟卡已到手！按 E 或点「保熟」');
         if (S.cards < CONFIG.certMax) {
           S.cards++;
           S.cardsMax = Math.max(S.cardsMax, S.cards);
@@ -2945,11 +3031,17 @@
     }
     spawnBurst(player.position.x, player.position.y + 1.3, player.position.z);
     startShock(player.position.x, 0.08, player.position.z);
-    showBubble('保熟！小弟上！', true);
+    showBubble(campaign ? '保熟！拉开距离！' : '保熟！小弟上！', true);
     window.AppAudio.skill();
     window.AppAudio.impact();
     window.AppAudio.playVoice('daxiang');
-    spawnSidekick();
+    if (campaign) {
+      S.chaserZOff = 0;
+      S.pushPoseT = .38;
+      S.chaserHitT = S.chaserHitMax = .32;
+    } else {
+      spawnSidekick();
+    }
     flashGold();
     updateSkillHUD();
   }
@@ -3130,9 +3222,11 @@
     if (S.sarilangCount >= 3) unlockEgg('sarilang3');
     S.headTurnT = CONFIG.sarilangHeadTime;
     S.headTurnDir = o.position.x >= player.position.x ? 1 : -1;
-    speechBubble.position.set(S.headTurnDir * 0.85, 3.3, 0);
-    speechBubble.visible = true;
-    sarilangFxT = 1.3;
+    if (!campaign) {
+      speechBubble.position.set(S.headTurnDir * 0.85, 3.3, 0);
+      speechBubble.visible = true;
+      sarilangFxT = 1.3;
+    }
   }
 
   function checkSarilangPass() {
@@ -3180,7 +3274,7 @@
   function tryEnterLastChance() {
     if (S.mode !== 'playing' || S.lastChanceT > 0 || S.cards <= 0) return false;
     S.lastChanceT = CONFIG.lastChanceTime;
-    S.slowmo = Math.max(S.slowmo, 1.6);
+    if (!campaign) S.slowmo = Math.max(S.slowmo, 1.6);
     el.skillBtn.classList.add('danger');
     showBubble('危险！快按 E 放大招保命！', true);
     return true;
@@ -3211,6 +3305,10 @@
   }
 
   function gameOver() {
+    if (campaign) {
+      finishChapter('caught');
+      return;
+    }
     S.mode = 'gameover';
     P.mode = 'caught';
     playerBody.visible = true; // 无敌闪烁可能把郝哥留在隐藏状态，死亡演出必须显示
@@ -3286,6 +3384,19 @@
 
   /* ---------------- 游戏流程 ---------------- */
   function startGame() {
+    if (streetModelBlocked) {
+      if (streetModelRetry) location.reload();
+      return;
+    }
+    if (pendingStreetModels) {
+      window.AppAudio.ensure();
+      startAfterModels = true;
+      return;
+    }
+    startAfterModels = false;
+    if (streetRoute) document.getElementById('streetLoadStatus').hidden = true;
+    var chapter = campaign && campaign.stage();
+    if (streetRoute) streetRoute.reset(chapter ? chapter.from : 0);
     window.AppAudio.ensure();
     window.AppAudio.ui();
     window.AppAudio.playVoice('baoshu');
@@ -3297,8 +3408,9 @@
     el.pauseBtn.textContent = '⏸';
     spawnSeed = initialSpawnSeed;
     S.mode = 'playing';
-    S.speed = CONFIG.baseSpeed;
-    S.dist = 0;
+    S.speed = chapter ? chapter.speed : CONFIG.baseSpeed;
+    S.dist = chapter ? chapter.from : 0;
+    S.chapterTime = 0;
     S.score = 0;
     S.melons = 0;
     S.golds = 0;
@@ -3316,14 +3428,13 @@
     S.sarilangCount = 0;
     S.skillsUsed = 0;
     S.cardsMax = 0;
-    S.gap = CONFIG.startGap;
-    S.camIntroT = CONFIG.camIntroTime;
+    S.gap = chapter ? chapter.gap : CONFIG.startGap;
+    S.camIntroT = chapter && chapter.from > 0 ? 0 : CONFIG.camIntroTime;
     S.camBlendT = 0;
     S.camBlendShown = false;
     // 开场镜头：从侧后方让郝哥和华强同框
-    camera.position.x = 2.8;
-    camera.position.y = 5.6;
-    camera.position.z = S.gap + 3.0;
+    if (streetRoute) camera.position.set(.72, 4.35, streetWideDistance(S.gap));
+    else camera.position.set(2.8, 5.6, S.gap + 3.0);
     S.spawnIn = 0;
     S.nextGap = 20;
     S.lastPole = false;
@@ -3367,7 +3478,7 @@
     S.sidekickT = 0;
     S.sidekickHitFx = false;
     S.tipsShown = {};
-    S.tipTimer = CONFIG.tipStartDelay;
+    S.tipTimer = campaign ? 0 : CONFIG.tipStartDelay;
     hideTip();
     el.skillBtn.classList.remove('danger');
     S.shake = 0;
@@ -3493,14 +3604,49 @@
     for (var i = 0; i < obstacles.length; i++) poolPut(obstacles, obstacles[i]);
     for (var j = 0; j < pickups.length; j++) poolPut(pickups, pickups[j]);
 
-    spawnPattern(CONFIG.spawnZ);
-    spawnPattern(CONFIG.spawnZ + 24);
+    if (campaign) {
+      campaign.reset();
+      campaign.queue(S.dist, spawnChapterItem);
+      if (chapter.from > 0) setStreetClosePosition(camera.position, 0);
+    } else {
+      spawnPattern(CONFIG.spawnZ);
+      spawnPattern(CONFIG.spawnZ + 24);
+    }
 
     hide('startScreen');
     hide('overScreen');
     show('hud');
     updateSkillHUD();
     updateHUD();
+  }
+
+  function spawnChapterItem(kind, lane, z, height) {
+    if (kind === 'melon' || kind === 'gold' || kind === 'cert') {
+      spawnPickup(kind, lane, z, height || (kind === 'cert' ? 1.28 : .54));
+    } else if (kind === 'tricycle') {
+      spawnTricycle(z);
+    } else {
+      spawnObstacle(kind, lane, z);
+    }
+  }
+
+  function finishChapter(reason) {
+    if (S.mode !== 'playing') return;
+    S.mode = 'chapter';
+    cleanupPigua();
+    P.mode = 'run';
+    playerBody.visible = true;
+    window.AppAudio.stop();
+    hide('hud');
+    hide('bubble');
+    hideTip();
+    campaign.finish(reason, S);
+  }
+
+  function nextChapter() {
+    if (S.mode !== 'chapter') return;
+    campaign.next();
+    startGame();
   }
 
   /* ---------------- 更新逻辑 ---------------- */
@@ -3528,10 +3674,25 @@
       S.lastChanceT -= dt;
       if (S.lastChanceT <= 0 && S.mode === 'playing') gameOver();
     }
+    if (campaign && S.mode !== 'playing') return;
 
-    S.speed = Math.min(CONFIG.maxSpeed, S.speed + CONFIG.accel * dt);
-    var moveSpeed = Math.min(CONFIG.maxSpeed, S.speed + (S.speedBoostT > 0 ? CONFIG.skillBoostSpeed : 0));
+    var chapter = campaign && campaign.stage();
+    var cruiseLimit = chapter ? Math.min(CONFIG.maxSpeed, chapter.cruiseSpeed) : CONFIG.maxSpeed;
+    S.speed = Math.min(cruiseLimit, S.speed + CONFIG.accel * dt);
+    var moveSpeed = currentMoveSpeed(chapter);
+    if (chapter) S.chapterTime += dt;
     S.dist += moveSpeed * dt;
+    if (streetRoute) {
+      streetRoute.update(S.dist, function (turn) {
+        if (turn.practice) return;
+        if (campaign && turn.required) {
+          finishChapter('missedTurn');
+          return;
+        }
+        if (S.skillT <= 0 && P.invuln <= 0 && P.mode !== 'fall') playHit();
+      }, campaign && campaign.turned);
+      if (S.mode !== 'playing') return;
+    }
     updateTheme(dt);
     S.score = calcScore();
 
@@ -3564,8 +3725,13 @@
       if (!o.userData.active) continue;
       o.userData.prevZ = o.position.z;
       o.position.z += moveSpeed * dt;
-      if (o.userData.kind === 'tricycle') {
+      if (o.userData.kind === 'tricycle' && (!campaign || o.position.z >= -22)) {
         o.userData.moveT = (o.userData.moveT || 0) + dt;
+        if (o.userData.wheels) {
+          for (var wheel = 0; wheel < o.userData.wheels.length; wheel++) {
+            o.userData.wheels[wheel].rotation.z = -o.userData.moveT * CONFIG.tricycleSpan * 2 / CONFIG.tricycleCrossTime / .285;
+          }
+        }
         o.position.x = o.userData.startX + o.userData.dir * ((2 * CONFIG.tricycleSpan) / CONFIG.tricycleCrossTime) * o.userData.moveT;
         if (Math.abs(o.position.x) > CONFIG.tricycleSpan + 0.6) poolPut(obstacles, o);
       }
@@ -3589,8 +3755,9 @@
     if (PIGUA.active) {
       updatePigua(dt);
     } else {
-      S.gap -= currentDrift() * dt;
-      if (S.gap < CONFIG.minGap) S.gap = CONFIG.minGap;
+      // Passive pressure cannot end a long chapter or make the next single mistake fatal.
+      var driftFloor = chapter ? CONFIG.catchGap + CONFIG.hitGapPenalty + .3 : CONFIG.minGap;
+      S.gap = Math.max(CONFIG.minGap, Math.max(Math.min(S.gap, driftFloor), S.gap - currentDrift() * dt));
       // 濒死时华强飞速冲上来近身
       var rushZOff = 0;
       if (S.lastChanceT > 0) {
@@ -3656,9 +3823,11 @@
         if (P.slideTimer <= 0) P.sliding = false;
       }
       player.position.y = P.y;
-      var slideTarget = P.sliding ? CONFIG.slideLean : 0;
+      // The skinned player gets the slide shape from its own animation.
+      var tiltSlide = P.sliding && !haoGe.userData.isPureGLB;
+      var slideTarget = tiltSlide ? CONFIG.slideLean : 0;
       haoGe.rotation.x += (slideTarget - haoGe.rotation.x) * Math.min(1, dt * 14);
-      var slideLiftTarget = P.sliding ? CONFIG.slideLift : 0;
+      var slideLiftTarget = tiltSlide ? CONFIG.slideLift : 0;
       haoGe.position.y += (slideLiftTarget - haoGe.position.y) * Math.min(1, dt * 14);
       P.invuln -= dt;
       if (P.invuln > 0) {
@@ -3672,14 +3841,24 @@
     } else if (P.mode === 'fall') {
       P.fallTimer -= dt;
       var t = 1 - Math.max(0, P.fallTimer) / CONFIG.fallTime;
-      haoGe.rotation.x = -t * 1.45;
+      haoGe.rotation.x = haoGe.userData.isPureGLB ? 0 : -t * 1.45;
       if (P.fallTimer <= 0) {
         P.mode = 'run';
         haoGe.rotation.x = 0;
       }
     }
 
-    spawnTick(dt);
+    if (campaign) {
+      if (S.mode !== 'playing') return;
+      var chapterEnd = campaign.crossing(S);
+      if (chapterEnd) {
+        finishChapter(chapterEnd);
+        return;
+      }
+      campaign.queue(S.dist, spawnChapterItem);
+    } else {
+      spawnTick(dt);
+    }
     piguaTick(dt);
     bubbleTick(dt);
     updatePersonScares(dt);
@@ -3690,11 +3869,13 @@
       if (!tryEnterLastChance()) gameOver();
     }
 
-    if (S.dist >= 100) unlockEgg('dist100');
-    if (S.dist >= 500) unlockEgg('dist500');
-    if (S.dist >= 1000) unlockEgg('dist1000');
-    if (S.dist >= 2000) unlockEgg('dist2000');
-    if (S.dist >= 300 && S.hitCount <= 0) unlockEgg('noHit300');
+    if (!campaign) {
+      if (S.dist >= 100) unlockEgg('dist100');
+      if (S.dist >= 500) unlockEgg('dist500');
+      if (S.dist >= 1000) unlockEgg('dist1000');
+      if (S.dist >= 2000) unlockEgg('dist2000');
+      if (S.dist >= 300 && S.hitCount <= 0) unlockEgg('noHit300');
+    }
 
     updateHUD();
   }
@@ -3758,6 +3939,19 @@
   }
 
   function updateTheme(dt) {
+    if (streetRoute) {
+      scene.fog.color.setHex(0xb0b8ab);
+      scene.fog.near = 34;
+      scene.fog.far = 82;
+      ambient.intensity = .19;
+      hemi.color.setHex(0xc3d4da);
+      hemi.groundColor.setHex(0x635042);
+      hemi.intensity = .58;
+      sun.color.setHex(0xffe8c9);
+      sun.intensity = 1.28;
+      renderer.toneMappingExposure = .93;
+      return;
+    }
     var target = currentThemeIndex();
     if (target !== S.themeTo) {
       S.themeFrom = S.themeTo;
@@ -4007,7 +4201,56 @@
     window.AppAudio.stop();
   }
 
+  function animateSkinnedHaoge() {
+    var blend = .085;
+    var action = 'run';
+    var options = { timeScale: S.mode === 'menu' ? 5 / 8 : (7 + S.speed * .18) / 8, blend: blend };
+    if (S.mode === 'playing') {
+      if (P.mode === 'fall') {
+        // Sample the ground-level stumble instead of the airborne fall clip.
+        var recovery = THREE.MathUtils.clamp(1 - P.fallTimer / CONFIG.fallTime, 0, 1);
+        action = 'slide';
+        var stumbleFrame = recovery < .62 ? .08 + (recovery / .62) * .28
+          : .36 - ((recovery - .62) / .38) * .22;
+        options = { at: stumbleFrame, blend: blend };
+        haoGe.userData.groundPose = P.grounded;
+      } else if (P.sliding && P.grounded) {
+        var slide = THREE.MathUtils.clamp(1 - P.slideTimer / CONFIG.slideTime, 0, 1);
+        var weight = THREE.MathUtils.smoothstep(slide, 0, .19) *
+          (1 - THREE.MathUtils.smoothstep(slide, .84, 1));
+        var rig = haoGe.userData;
+        if (rig.currentAction) window.RunnerAnim.freeze(haoGe);
+        // A feet-first slide needs a backwards lean and a quiet upper body.
+        // The imported roll always rotates or raises the torso mid-clip.
+        haoGe.rotation.x = 1.41 * weight;
+        rig.leftArm.rotation.x = -.24 * weight;
+        rig.rightArm.rotation.x = -.31 * weight;
+        rig.leftLeg.rotation.x = -.12 * weight;
+        rig.rightLeg.rotation.x = .16 * weight;
+        rig.groundPose = true;
+        return;
+      } else if (!P.grounded) {
+        var second = P.jumps > 1;
+        var launch = second ? CONFIG.doubleJumpVel : CONFIG.jumpVel;
+        var air = THREE.MathUtils.clamp((launch - P.vy) / (2 * launch), 0, 1);
+        var frame = second ? .66 + air * .69 : .39 + air * .96;
+        if (P.sliding) frame = 1 + .34 * (1 - Math.max(0, P.airSlideT) / CONFIG.airSlideTime);
+        else if (P.legTuckT > 0) frame = .90;
+        action = second ? 'doubleJump' : 'jump';
+        options = { at: frame, blend: blend };
+        // Keep the authored arm timing with a tighter silhouette in the air.
+        var tuck = .45 * Math.sin(Math.PI * THREE.MathUtils.clamp((frame - .42) / .70, 0, 1));
+        haoGe.userData.leftArm.rotation.z = -tuck;
+        haoGe.userData.rightArm.rotation.z = tuck;
+      }
+    }
+    if (!window.RunnerAnim.play(haoGe, action, options)) window.RunnerAnim.play(haoGe, 'run', { blend: blend });
+  }
+
   function animateCharacters(dt) {
+    if (cast && !cast.isReady()) return;
+    var rig = haoGe.userData.isPureGLB ? haoGe.userData : null;
+    if (rig) rig.groundPose = false;
     if (window.RunnerAnim && (
       S.mode === 'gameover' ||
       PIGUA.active ||
@@ -4017,9 +4260,11 @@
       S.chaserHitT > 0 ||
       S.lastChanceT > 0
     )) {
-      window.RunnerAnim.freeze(haoGe);
+      if (!rig || S.mode === 'gameover') window.RunnerAnim.freeze(haoGe);
       window.RunnerAnim.freeze(huaQiang);
     }
+    if (rig && S.mode === 'gameover') return; // 结局姿势由 updateDeath 写入控制器
+    if (rig) rig.clearRigPose();
     if (PIGUA.active && haoGe.userData && haoGe.userData.head) {
       var piguaTurn = Math.min(1, PIGUA.t / CONFIG.piguaHeadTurnIn);
       var piguaYaw = CONFIG.piguaHeadYaw * easeInOut(piguaTurn);
@@ -4048,7 +4293,9 @@
     var runK = 0;
     if (S.mode === 'playing' && P.mode === 'run') runK = 7 + S.speed * 0.18;
     if (S.mode === 'menu') runK = 5;
-    if (!PIGUA.active && S.mode !== 'gameover') {
+    if (rig) {
+      animateSkinnedHaoge();
+    } else if (!PIGUA.active && S.mode !== 'gameover') {
       if (S.mode === 'playing' && P.sliding && haoGe.userData) {
         if (haoGe.userData.isGLB) {
           window.RunnerAnim.play(haoGe, 'slide', { timeScale: 1.6 });
@@ -4088,7 +4335,7 @@
         window.Runners.animateRunner(haoGe, S.time, runK);
       }
     }
-    if (P.legTuckT > 0 && !P.grounded && !PIGUA.active && haoGe.userData) {
+    if (!rig && P.legTuckT > 0 && !P.grounded && !PIGUA.active && haoGe.userData) {
       if (haoGe.userData.isGLB) {
         window.RunnerAnim.play(haoGe, 'doubleJump', { timeScale: 1 });
       } else {
@@ -4104,15 +4351,20 @@
     if (S.headTurnT > 0 && haoGe.userData) {
       var armK = Math.min(1, Math.max(0, S.headTurnT / (CONFIG.sarilangHeadTime * 0.2)));
       if (haoGe.userData.leftArm) {
-        haoGe.userData.leftArm.rotation.x = CONFIG.sarilangArmLift;
+        haoGe.userData.leftArm.rotation.x = rig ? -.30 * armK : CONFIG.sarilangArmLift;
         haoGe.userData.leftArm.rotation.z = -S.headTurnDir * CONFIG.sarilangArmSide * armK;
       }
       if (haoGe.userData.rightArm) {
-        haoGe.userData.rightArm.rotation.x = CONFIG.sarilangArmLift;
+        haoGe.userData.rightArm.rotation.x = rig ? -.30 * armK : CONFIG.sarilangArmLift;
         haoGe.userData.rightArm.rotation.z = S.headTurnDir * CONFIG.sarilangArmSide * armK;
       }
     }
-    if (PIGUA.active && P.mode === 'run' && P.grounded && !P.sliding && haoGe.userData) {
+    if (rig && PIGUA.active && P.mode === 'run' && P.grounded && !P.sliding) {
+      var brace = Math.min(1, PIGUA.t / .24) *
+        (1 - THREE.MathUtils.clamp((PIGUA.t - CONFIG.piguaWarnTime - CONFIG.piguaHoldTime) / .42, 0, 1));
+      rig.leftArm.rotation.x = -.42 * brace;
+      rig.rightArm.rotation.x = -.58 * brace;
+    } else if (!rig && PIGUA.active && P.mode === 'run' && P.grounded && !P.sliding && haoGe.userData) {
       // 华强劈瓜演出：郝哥停下跑步，转头看华强，双手护头/护胸，小碎步后撤
       if (haoGe.userData.head) haoGe.userData.head.rotation.y = S.piguaHeadDir * 0.55;
       haoGe.userData.leftArm.rotation.x = -2.1;
@@ -4124,7 +4376,11 @@
       haoGe.rotation.x = 0.08;
       haoGe.position.y = Math.abs(Math.sin(S.time * 10)) * 0.04;
     }
-    if (S.pushPoseT > 0 && haoGe.userData) {
+    if (rig && S.pushPoseT > 0 && P.mode === 'run' && !P.sliding) {
+      var push = Math.min(1, S.pushPoseT / .15);
+      rig.leftArm.rotation.x = -.86 * push;
+      rig.rightArm.rotation.x = -.86 * push;
+    } else if (!rig && S.pushPoseT > 0 && haoGe.userData) {
       // 开大招推掌：双臂前推，微微前倾
       haoGe.userData.leftArm.rotation.x = -1.55;
       haoGe.userData.rightArm.rotation.x = -1.55;
@@ -4198,8 +4454,24 @@
     }
   }
 
+  var streetCameraPosition = new THREE.Vector3();
+  function streetWideDistance(chaseZ) {
+    return Math.max(8.8, Math.min(13, chaseZ + 2.6));
+  }
+
+  function setStreetClosePosition(target, laneX) {
+    var portrait = camera.aspect < .85;
+    target.set(laneX * .56 + (portrait ? .18 : .60), portrait ? 3.7 : 3.25, portrait ? 8.55 : 7.55);
+  }
+
   function cameraUpdate(dt) {
     if (S.mode === 'menu') {
+      if (streetRoute) {
+        var portrait = camera.aspect < .85;
+        camera.position.set(portrait ? -1.4 : -3.5, portrait ? 4.4 : 3.9, 11.8);
+        camera.lookAt(.85, 1.6, -12);
+        return;
+      }
       camera.position.y = 7.4;
       camera.position.z = 9.2;
       camera.lookAt(0, 1.3, -10);
@@ -4262,6 +4534,18 @@
     var lookX = introLX + (chaseLX - introLX) * k;
     var lookY = introLY + (chaseLY - introLY) * k;
     var lookZ = introLZ + (chaseLZ - introLZ) * k;
+    if (streetRoute) {
+      var laneX = player.position.x;
+      var lerp = THREE.MathUtils.lerp;
+      setStreetClosePosition(streetCameraPosition, laneX);
+      targetX = lerp(laneX * .52 + .72, streetCameraPosition.x, k);
+      targetY = lerp(4.35, streetCameraPosition.y, k);
+      targetZ = lerp(streetWideDistance(chaseZ), streetCameraPosition.z, k);
+      var ahead = streetRoute.lookAhead(S.dist, 11);
+      lookX = lerp(laneX * .48, ahead.x * .78 + laneX * .19, k);
+      lookY = lerp(1.35, 1.15, k);
+      lookZ = lerp(-8.5, ahead.z, k);
+    }
     var shakeX = 0;
     var shakeY = 0;
     if (S.shake > 0) {
@@ -4277,8 +4561,15 @@
       urgency = Math.sin(bp * Math.PI) * 0.28;
     }
     camera.position.x += (targetX + shakeX - camera.position.x) * Math.min(1, dt * 6);
-    camera.position.y += (targetY + shakeY - camera.position.y) * Math.min(1, dt * 5);
-    camera.position.z += (targetZ - camera.position.z) * Math.min(1, dt * 5);
+    if (streetRoute) {
+      // The opening already has an easing curve. Apply it directly so the
+      // near framing lands at the end of the transition.
+      camera.position.y = targetY + shakeY;
+      camera.position.z = targetZ;
+    } else {
+      camera.position.y += (targetY + shakeY - camera.position.y) * Math.min(1, dt * 5);
+      camera.position.z += (targetZ - camera.position.z) * Math.min(1, dt * 5);
+    }
     camera.lookAt(lookX, lookY, lookZ);
     el.vignette.style.opacity = Math.min(0.62, tension * 0.2 + S.flash + urgency).toFixed(3);
   }
@@ -4306,6 +4597,11 @@
       return;
     }
     if (S.mode === 'menu' && (k === 'Enter' || k === ' ')) { startGame(); return; }
+    if (campaign && S.mode === 'chapter' && (k === 'Enter' || k === ' ')) {
+      e.preventDefault();
+      nextChapter();
+      return;
+    }
     if (S.mode === 'gameover' && S.canSkipEnding && !S.deathOverShown && (k === 'Enter' || k === ' ')) {
       skipEnding();
       return;
@@ -4313,8 +4609,8 @@
     if (S.mode === 'gameover' && (k === 'Enter' || k === ' ')) { startGame(); return; }
     if (k === ' ' && (S.mode === 'playing' || S.mode === 'paused')) { togglePause(); return; }
     if (S.mode !== 'playing') return;
-    if (k === 'ArrowLeft' || k === 'a' || k === 'A') moveLane(-1);
-    else if (k === 'ArrowRight' || k === 'd' || k === 'D') moveLane(1);
+    if (k === 'ArrowLeft' || k === 'a' || k === 'A') moveLane(-1, e.repeat);
+    else if (k === 'ArrowRight' || k === 'd' || k === 'D') moveLane(1, e.repeat);
     else if (k === 'ArrowUp' || k === 'w' || k === 'W') doJump();
     else if (k === 'ArrowDown' || k === 's' || k === 'S') doSlide();
   });
@@ -4374,6 +4670,14 @@
   }
 
   el.startBtn.addEventListener('click', startGame);
+  if (campaign) {
+    document.getElementById('chapterNextBtn').addEventListener('click', nextChapter);
+    document.getElementById('chapterNewRun').addEventListener('click', function () {
+      campaign.restart();
+      startGame();
+    });
+    el.pauseRestartBtn.textContent = '重试本段';
+  }
   el.restartBtn.addEventListener('click', startGame);
   el.eggBtn.addEventListener('click', openEggModal);
   el.eggClose.addEventListener('click', function () { hide('eggModal'); });
@@ -4390,7 +4694,23 @@
     S.tipsEnabled = true;
   });
   el.muteBtn.addEventListener('click', toggleMute);
-  el.pauseBtn.addEventListener('click', togglePause);
+  // Chrome can suppress the first synthetic click after a swipe. Handle a
+  // touch tap on release while retaining keyboard and mouse activation.
+  var pauseTouchId = null;
+  el.pauseBtn.addEventListener('pointerdown', function (e) {
+    if (e.pointerType === 'touch') pauseTouchId = e.pointerId;
+  });
+  el.pauseBtn.addEventListener('pointercancel', function (e) {
+    if (e.pointerId === pauseTouchId) pauseTouchId = null;
+  });
+  el.pauseBtn.addEventListener('pointerup', function (e) {
+    if (e.pointerId !== pauseTouchId) return;
+    pauseTouchId = null;
+    if (el.pauseBtn.contains(document.elementFromPoint(e.clientX, e.clientY))) togglePause();
+  });
+  el.pauseBtn.addEventListener('click', function (e) {
+    if (e.pointerType !== 'touch') togglePause();
+  });
   el.resumeBtn.addEventListener('click', function () { setPaused(false); });
   el.pauseRestartBtn.addEventListener('click', function () {
     setPaused(false);
@@ -4405,6 +4725,11 @@
   });
 
   /* ---------------- 主循环 ---------------- */
+  function renderGame() {
+    if (streetRoute) streetRoute.render(renderer, camera, S.dist, S.mode === 'playing', S.time);
+    else renderer.render(scene, camera);
+  }
+
   var last = performance.now();
   function loop(now) {
     requestAnimationFrame(loop);
@@ -4413,15 +4738,15 @@
     if (S.mode === 'playing') update(dt);
     else if (S.mode === 'menu') updateMenu(dt);
     else if (S.mode === 'gameover') updateDeath(dt);
-    else if (S.mode === 'paused') {
-      renderer.render(scene, camera);
+    if (S.mode === 'paused' || S.mode === 'chapter') {
+      renderGame();
       return;
     }
     fxTick(dt);
     animateCharacters(dt);
     if (window.RunnerModels && window.RunnerModels.update) window.RunnerModels.update(dt);
     cameraUpdate(dt);
-    renderer.render(scene, camera);
+    renderGame();
   }
 
   try {
@@ -4437,10 +4762,12 @@
   } catch (e) {
     S.tipsEnabled = false;
   }
-  try {
-    if (!localStorage.getItem('haoge_intro_seen')) showIntro();
-  } catch (e) {
-    showIntro();
+  if (!campaign) {
+    try {
+      if (!localStorage.getItem('haoge_intro_seen')) showIntro();
+    } catch (e) {
+      showIntro();
+    }
   }
   window.__gameDebug = {
     scene: scene,
@@ -4453,11 +4780,14 @@
     huaQiang: huaQiang,
     playerBody: playerBody,
     chaserBody: chaserBody,
+    campaign: campaign,
   };
   el.bestStart.textContent = S.best;
   el.iconMelon.src = drawIcon('melon');
   el.iconGold.src = drawIcon('gold');
   el.iconCert.src = drawIcon('cert');
   updateHUD();
+  if (streetRoute) updateTheme(0);
+  loadCharacters();
   requestAnimationFrame(loop);
 })();

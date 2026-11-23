@@ -6,9 +6,18 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 <title>郝哥快跑 · 这瓜保熟吗？</title>
 <link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="css/street-ui.css?v=2">
+<script>
+  window.HAOGE_SOURCE_ONLY = true;
+  window.HAOGE_CAMPAIGN = new URLSearchParams(location.search).get('campaign') !== '0';
+  if (window.HAOGE_CAMPAIGN) {
+    document.documentElement.classList.add('street-ui', 'street-campaign');
+  }
+</script>
 </head>
 <body>
 <div id="game-container"></div>
+<div id="streetLoadStatus" class="street-load" role="status" hidden></div>
 
 <div id="hud" class="hidden">
   <div class="hud-left">
@@ -35,6 +44,13 @@
     <button id="pauseBtn" class="icon-btn" title="暂停 (空格)">⏸</button>
   </div>
 </div>
+
+<section id="chapterHud" class="chapter-hud" aria-label="本段目标" hidden>
+  <h2 id="chapterHudTitle"></h2>
+  <div class="chapter-hud-row"><span id="chapterHudGoal"></span><span id="chapterHudTime" aria-label="已跑时间">0:00</span><span id="chapterHudExit"></span></div>
+  <progress id="chapterProgress" max="1" value="0" aria-label="本段路线进度"></progress>
+  <div id="chapterTurnGuide"></div>
+</section>
 
 <div id="bubble" class="bubble hidden"></div>
 
@@ -80,6 +96,7 @@
     <button id="startBtn" class="btn">开始跑！</button>
     <button id="eggBtn" class="btn btn-small">彩蛋图鉴</button>
     <button id="helpBtn" class="btn btn-small">玩法说明</button>
+    <button id="chapterNewRun" class="btn btn-small" hidden>从第一段开始</button>
   </div>
 </div>
 
@@ -121,19 +138,23 @@
         </div>
       </div>
       <div class="controls">
+        <div class="ctrl street-only">路口出现转向提示后，沿箭头方向滑动或按方向键。</div>
+        <div class="ctrl chapter-only">每段先完成上方目标，再跑过出口。通过后可从下一段继续。</div>
         <div class="ctrl">← → / A D · 换道</div>
         <div class="ctrl">↑ / W · 跳跃（可二段跳，空中可换道）</div>
         <div class="ctrl">空格 · 暂停</div>
         <div class="ctrl">↓ / S · 滑铲</div>
         <div class="ctrl">E / 技能按钮 · 释放保熟技能</div>
-        <div class="ctrl">大招：小弟抡铁锤把华强打飞出屏幕</div>
+        <div class="ctrl chapter-only">保熟：短暂加速并拉开与华强的距离</div>
+        <div class="ctrl chapter-legacy">大招：小弟抡铁锤把华强打飞出屏幕</div>
         <div class="ctrl">华强距离条：绿色安全 / 黄色危险 / 红色快被抓 · 保熟卡按 E 推远</div>
         <div class="ctrl ctrl-touch">手机：左右滑换道 · 上滑跳 · 下滑铲</div>
+        <div class="ctrl street-turn-help">弯口有路面箭头。提示变绿时点转弯按钮、按对应方向键或向该方向滑动。</div>
       </div>
       <div class="hint">瓜摊只能跳过去！晾衣杆：滑铲或跳过去！横穿三轮车：看准空隙换道或跳过去！路过大妈（相邻车道）郝哥会喊萨日朗！华强路过一家三口会喊华强/哎华强！撞到东西华强会追近，被抓住就完了！</div>
-      <div class="credit">灵感致敬电视剧《征服》(2003) 经典场面 · 原创卡通演绎</div>
+      <div class="credit">灵感致敬电视剧《征服》(2003) 经典场面</div>
       <button id="introReplay" class="btn btn-small">再看一遍开场</button>
-      <button id="tipReplay" class="btn btn-small">重看新手提示</button>
+      <button id="tipReplay" class="btn btn-small chapter-legacy">重看新手提示</button>
     </div>
     <button id="helpClose" class="btn btn-small">返回</button>
   </div>
@@ -166,7 +187,14 @@
   </div>
 </div>
 
-<script>window.HAOGE_SOURCE_ONLY = true;</script>
+<div id="chapterScreen" class="screen hidden" role="dialog" aria-modal="true" aria-labelledby="chapterTitle">
+  <div class="panel chapter-panel">
+    <h2 id="chapterTitle" class="over-title"></h2>
+    <p id="chapterDetail"></p>
+    <button id="chapterNextBtn" class="btn">下一段</button>
+  </div>
+</div>
+
 <script src="js/vendor/three.min.js?v=3"></script>
 <script src="js/vendor/GLTFLoader.js?v=3"></script>
 <script src="js/config.js?v=3"></script>
@@ -176,7 +204,14 @@
 <script src="js/models.js?v=3"></script>
 <script src="js/animations.js?v=3"></script>
 <script src="js/obstacles.js?v=3"></script>
+<script src="js/street-pedestrian.js?v=2"></script>
+<script src="js/street-crowd.js?v=3"></script>
+<script src="js/street-items.js?v=1"></script>
 <script src="js/model-switch.js?v=3"></script>
-<script src="js/game.js?v=3"></script>
+<script src="js/street-art.js?v=4"></script>
+<script src="js/street-route.js?v=4"></script>
+<script src="js/street-campaign.js?v=3"></script>
+<script src="js/street-cast.js?v=1"></script>
+<script src="js/game.js?v=5"></script>
 </body>
 </html>

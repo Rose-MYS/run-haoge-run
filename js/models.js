@@ -12,10 +12,11 @@ window.RunnerModels = (function () {
   var fromFile = location.protocol === 'file:';
   var modelsEmbedded = MODEL_URLS.haoge.indexOf('data:') === 0;
   var params = new URLSearchParams(location.search);
-  var toonPreview = params.get('style') === 'toon';
-  var refinedChaser = params.get('chaser') === 'refined' || REFINED_CHASER_URL.indexOf('data:') === 0;
-  var proceduralPreview = window.HAOGE_SOURCE_ONLY || window.HAOGE_PROCEDURAL_CHARACTERS ||
-    params.get('models') === 'procedural';
+  var campaignMode = window.HAOGE_CAMPAIGN || params.get('campaign') === '1';
+  var toonPreview = !campaignMode && params.get('style') === 'toon';
+  var refinedChaser = campaignMode || params.get('chaser') === 'refined' || REFINED_CHASER_URL.indexOf('data:') === 0;
+  var proceduralPreview = window.HAOGE_SOURCE_ONLY ||
+    (!campaignMode && (window.HAOGE_PROCEDURAL_CHARACTERS || params.get('models') === 'procedural'));
 
   // —— 开发期郝哥模型切换（临时调试用，定稿后可删除本段 + setHaogePack 相关导出）——
   var HAOGE_PACKS = [
@@ -31,7 +32,7 @@ window.RunnerModels = (function () {
     return HAOGE_PACKS[0].url;
   }
   function activeHaogePackId() {
-    if (fromFile || modelsEmbedded) return HAOGE_PACKS[0].id;
+    if (campaignMode || fromFile || modelsEmbedded) return HAOGE_PACKS[0].id;
     var want = '';
     try { want = (localStorage && localStorage.getItem('haogeModelPack')) || ''; } catch (e) {}
     for (var p = 0; p < HAOGE_PACKS.length; p++) {
@@ -497,24 +498,13 @@ window.RunnerModels = (function () {
     var sculptBones = [];
 
     if (pure) {
-      var headBone = findBone(model, boneNamesAny('Head')) ||
-        findBone(model, boneNamesAny('Neck'));
-      var headPivot = new THREE.Group();
-      if (headBone) headBone.add(headPivot);
       var handMeshes = [];
       model.traverse(function (o) {
         if (o.isMesh && /hand|palm|finger/i.test(o.name)) handMeshes.push(o);
       });
-      return {
-        head: headPivot,
+      var rigged = {
         faceMesh: null,
         faceControls: { sweat: null },
-        leftArm: findBone(model, boneNamesAny('LeftArm')) || new THREE.Group(),
-        rightArm: findBone(model, boneNamesAny('RightArm')) || new THREE.Group(),
-        leftLeg: findBone(model, boneNamesAny('LeftUpLeg')) ||
-          findBone(model, boneNamesAny('LeftLeg')) || new THREE.Group(),
-        rightLeg: findBone(model, boneNamesAny('RightUpLeg')) ||
-          findBone(model, boneNamesAny('RightLeg')) || new THREE.Group(),
         hands: handMeshes,
         knifeBlade: null,
         elbows: [new THREE.Group(), new THREE.Group()],
@@ -524,6 +514,8 @@ window.RunnerModels = (function () {
         hiddenBones: [],
         sculptBones: [],
       };
+      bindHaogePose(model, rigged);
+      return rigged;
     }
 
     var hideBody = kind !== 'haoge';
@@ -800,6 +792,82 @@ window.RunnerModels = (function () {
     return body;
   }
 
+  function bindHaogePose(model, body) {
+    model.updateWorldMatrix(true, true);
+    var modelInverse = model.getWorldQuaternion(new THREE.Quaternion()).invert();
+    var motion = new THREE.Euler();
+    var delta = new THREE.Quaternion();
+    var local = new THREE.Quaternion();
+    var controls = [];
+
+    function bind(key, names, restingArm) {
+      var input = new THREE.Group();
+      body[key] = input;
+      var bone = findBone(model, names);
+      if (!bone) return;
+      var axes = modelInverse.clone().multiply(bone.parent.getWorldQuaternion(new THREE.Quaternion()));
+      controls.push({
+        bone: bone, input: input, rest: bone.quaternion.clone(), previous: bone.quaternion.clone(),
+        axes: axes, inverseAxes: axes.clone().invert(), restingArm: restingArm, applied: false,
+      });
+    }
+
+    bind('head', boneNamesAny('Head').concat(boneNamesAny('Neck')), 0);
+    bind('leftArm', boneNamesAny('LeftArm'), -.63);
+    bind('rightArm', boneNamesAny('RightArm'), .63);
+    bind('leftLeg', boneNamesAny('LeftUpLeg').concat(boneNamesAny('LeftLeg')), 0);
+    bind('rightLeg', boneNamesAny('RightUpLeg').concat(boneNamesAny('RightLeg')), 0);
+    body.clearRigPose = function () {
+      for (var i = 0; i < controls.length; i++) controls[i].input.rotation.set(0, 0, 0);
+    };
+    body.restoreRigPose = function () {
+      for (var i = 0; i < controls.length; i++) {
+        var pose = controls[i];
+        if (pose.applied) pose.bone.quaternion.copy(pose.previous);
+        pose.applied = false;
+      }
+    };
+    body.applyRigPose = function () {
+      var animated = !!body.currentAction;
+      for (var i = 0; i < controls.length; i++) {
+        var pose = controls[i];
+        var angle = pose.input.rotation;
+        if (animated && angle.x === 0 && angle.y === 0 && angle.z === 0) continue;
+        motion.set(angle.x, angle.y, angle.z + (animated ? 0 : pose.restingArm), 'XYZ');
+        delta.setFromEuler(motion);
+        local.copy(pose.inverseAxes).multiply(delta).multiply(pose.axes);
+        pose.previous.copy(pose.bone.quaternion);
+        pose.bone.quaternion.copy(local).multiply(animated ? pose.previous : pose.rest);
+        pose.applied = true;
+      }
+    };
+    var skin = model.getObjectByProperty('isSkinnedMesh', true);
+    if (!skin) return;
+    var vertices = skin.geometry.getAttribute('position');
+    var step = Math.max(1, Math.floor(vertices.count / 1400));
+    var vertex = new THREE.Vector3();
+    var floor = new THREE.Vector3();
+    var contactTime = 0;
+    body.alignGroundPose = function (runner, dt) {
+      if (body.groundPose) contactTime = .10;
+      else if (contactTime > 0) contactTime -= dt;
+      var visualRoot = runner.parent;
+      visualRoot.position.y = 0;
+      if (contactTime <= 0) return;
+      // The imported low poses rotate around the hips. Move only the
+      // visible body down to the road, leaving lane and collision state alone.
+      visualRoot.getWorldPosition(floor);
+      visualRoot.updateMatrixWorld(true);
+      var bottom = Infinity;
+      for (var i = 0; i < vertices.count; i += step) {
+        vertex.fromBufferAttribute(vertices, i);
+        skin.boneTransform(i, vertex);
+        bottom = Math.min(bottom, vertex.applyMatrix4(skin.matrixWorld).y);
+      }
+      visualRoot.position.y = THREE.MathUtils.clamp(floor.y - bottom + .04, -1.05, .42);
+    };
+  }
+
   function calibrate(model, height) {
     var scale = height / BASE.height;
     model.scale.set(scale, scale, scale);
@@ -880,10 +948,10 @@ window.RunnerModels = (function () {
   }
 
   function loadGltf(kind, cb, fail) {
-    var urls = [];
     var primary = primaryUrlFor(kind);
-    if (primary !== DEFAULT_MODEL_URL) urls.push(primary);
-    if (urls.indexOf(DEFAULT_MODEL_URL) < 0) urls.push(DEFAULT_MODEL_URL);
+    var strict = campaignMode && (kind === 'haoge' || kind === 'huaqiang');
+    var urls = [primary];
+    if (!strict && primary !== DEFAULT_MODEL_URL) urls.push(DEFAULT_MODEL_URL);
     var i = 0;
     function next() {
       if (i >= urls.length) {
@@ -896,6 +964,12 @@ window.RunnerModels = (function () {
         return;
       }
       loader.load(url, function (gltf) {
+        if (strict && kind === 'haoge' &&
+          (!gltf.scene.getObjectByProperty('isSkinnedMesh', true) ||
+            !gltf.animations.some(function (clip) { return normKey(clip.name) === 'run'; }))) {
+          next();
+          return;
+        }
         var refinedMesh = url === REFINED_CHASER_URL && gltf.scene.getObjectByName('Huaqiang');
         if (url === REFINED_CHASER_URL && (
           !refinedMesh || !refinedMesh.isSkinnedMesh || !refinedMesh.morphTargetInfluences ||
@@ -916,8 +990,11 @@ window.RunnerModels = (function () {
   }
 
   function loadRunner(runner, kind, opts) {
-    if (proceduralPreview || !runner || (runner.userData && runner.userData.isGLB)) return;
     opts = opts || {};
+    if (proceduralPreview || !runner || (runner.userData && runner.userData.isGLB)) {
+      if (opts.onSettled) opts.onSettled();
+      return;
+    }
     var height = opts.height || (KINDS[kind] && KINDS[kind].height) || 2.2;
     var runnerScale = runner.scale.x || 1;
     var oldHammer = runner.userData && runner.userData.hammer;
@@ -982,12 +1059,14 @@ window.RunnerModels = (function () {
       for (var s = 0; s < sprites.length; s++) runner.add(sprites[s]);
       if (runners.indexOf(runner) < 0) runners.push(runner);
       if (opts.onLoad) opts.onLoad(runner);
+      if (opts.onSettled) opts.onSettled(usedUrl === primaryUrlFor(kind));
       if (pure) console.info('[RunnerModels] 郝哥模型已加载：' + (modelsEmbedded ? '内嵌模型' : usedUrl));
       if (pure && gltf.animations.length === 0) {
         console.warn('[RunnerModels] 当前郝哥 GLB 没有骨骼动画，请从 Meshy 的 Rigging/Animation 页面导出带动画的 GLB/FBX');
       }
     }, function () {
       console.warn('[RunnerModels] GLB 加载失败，保留程序化角色：' + kind);
+      if (opts.onSettled) opts.onSettled(false);
     });
   }
 
@@ -1034,7 +1113,10 @@ window.RunnerModels = (function () {
   function update(dt) {
     for (var i = 0; i < runners.length; i++) {
       var u = runners[i].userData;
+      if (u && u.restoreRigPose) u.restoreRigPose();
       if (u && u.mixer) u.mixer.update(dt);
+      if (u && u.applyRigPose) u.applyRigPose();
+      if (u && u.alignGroundPose) u.alignGroundPose(runners[i], dt);
       if (u && u.applyManualPose && !u.currentAction) u.applyManualPose();
       if (u && u.hiddenBones) {
         for (var h = 0; h < u.hiddenBones.length; h++) u.hiddenBones[h].scale.setScalar(0.0001);
@@ -1047,6 +1129,7 @@ window.RunnerModels = (function () {
 
   return {
     loadRunner: loadRunner,
+    usesGltf: function () { return !proceduralPreview && (!fromFile || modelsEmbedded); },
     setFace: setFace,
     setBloodyHands: setBloodyHands,
     setBloodyKnife: setBloodyKnife,
