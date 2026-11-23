@@ -27,3 +27,8 @@
 各段长度、弯道和障碍配置位于 `js/street-campaign.js`，街景位于 `js/street-art.js`，主循环和玩法逻辑位于 `js/game.js`。GitHub Pages 从 `main` 分支根目录发布。
 
 公开版随游戏提供两份现役模型的运行数据及合成音效。独立脸部贴图、录音、参考素材和完整离线成品由作者在本机管理。Three.js 的第三方许可见 [MIT 许可](js/vendor/THREE-LICENSE.txt)。
+
+## 贡献者
+
+- **Rose-MYS**（作者、策划与验收）
+- **Google Antigravity (Gemini)**（AI 协作开发）
