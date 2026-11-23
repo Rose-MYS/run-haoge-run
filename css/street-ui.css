@@ -90,12 +90,83 @@
 .street-campaign #chapterScreen { z-index: 28; }
 
 .street-campaign .bubble {
-  top: 112px;
-  max-width: 85vw;
-  padding: .5rem .8rem;
-  font-size: clamp(14px, 2.4vw, 21px);
+  top: auto;
+  bottom: 24px;
+  left: 50%;
+  max-width: min(360px, 82vw);
+  padding: .36rem .72rem;
+  font-size: clamp(13px, 2vw, 16px);
   text-align: center;
   white-space: normal;
+  pointer-events: none;
+  border-left: 3px solid #e0ac67;
+}
+
+.menu-sub-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .45rem;
+}
+
+#streetFeedbackLayer {
+  position: fixed;
+  inset: 0;
+  z-index: 14;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.sf-pop {
+  position: absolute;
+  left: 50%;
+  top: 42%;
+  transform: translate(-50%, 0);
+  padding: .18rem .52rem;
+  border-radius: 2px;
+  font-weight: 800;
+  font-size: clamp(15px, 2.8vw, 20px);
+  color: #fff6d6;
+  background: rgba(21, 39, 33, .82);
+  border-left: 3px solid #e0ac67;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, .5);
+  white-space: nowrap;
+  opacity: 0;
+}
+
+.sf-pop.sf-gold { color: #ffe07d; border-color: #ffd15c; }
+.sf-pop.sf-turn { color: #c4f39a; border-color: #8ee068; }
+.sf-pop.sf-wave { top: 28%; font-size: clamp(16px, 3vw, 22px); border-color: #aa3f27; }
+
+.sf-pop.sf-run {
+  animation: sfFloatUp .88s cubic-bezier(.16, .84, .32, 1) forwards;
+}
+
+@keyframes sfFloatUp {
+  0% { opacity: 0; transform: translate(-50%, 10px) scale(.9); }
+  18% { opacity: 1; transform: translate(-50%, -4px) scale(1.04); }
+  75% { opacity: 1; transform: translate(-50%, -26px) scale(1); }
+  100% { opacity: 0; transform: translate(-50%, -42px) scale(.96); }
+}
+
+#streetSpeedLines {
+  position: fixed;
+  inset: 0;
+  z-index: 9;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity .22s ease;
+  background: radial-gradient(circle at 50% 52%, transparent 52%, rgba(255, 222, 130, .18) 88%, rgba(255, 202, 88, .32) 100%);
+}
+
+#streetSpeedLines.active { opacity: 1; }
+
+#streetDangerGlow {
+  position: fixed;
+  inset: 0;
+  z-index: 8;
+  pointer-events: none;
+  opacity: 0;
+  background: radial-gradient(ellipse at 50% 108%, rgba(190, 38, 28, .55) 0%, rgba(160, 26, 22, .18) 38%, transparent 68%);
 }
 
 .street-campaign .tip {
@@ -134,7 +205,7 @@
     width: min(282px, 73vw);
   }
   .street-campaign .chase-wrap { top: 52px; width: min(200px, 62vw); }
-  .street-campaign .bubble { top: 147px; }
+  .street-campaign .bubble { top: auto; bottom: 102px; }
   .street-campaign .tip { top: 200px; }
 }
 

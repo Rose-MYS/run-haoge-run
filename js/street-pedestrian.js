@@ -18,7 +18,23 @@ window.StreetPedestrian = (function () {
   ];
 
   function shading(color, extra) {
-    return new THREE.MeshStandardMaterial(Object.assign({ color: color, roughness: .87 }, extra));
+    return new THREE.MeshStandardMaterial(Object.assign({ color: color, roughness: .91 }, extra));
+  }
+
+  var contactShadowMat = null;
+  var contactShadowGeo = null;
+  function addContactShadow(root) {
+    if (!contactShadowMat) {
+      contactShadowGeo = new THREE.CircleGeometry(.34, 18);
+      contactShadowGeo.rotateX(-Math.PI / 2);
+      contactShadowMat = new THREE.MeshBasicMaterial({
+        color: 0x161a18, transparent: true, opacity: .24, depthWrite: false,
+      });
+    }
+    var disc = new THREE.Mesh(contactShadowGeo, contactShadowMat);
+    disc.position.y = .015;
+    disc.scale.set(1.05, 1, .86);
+    root.add(disc);
   }
 
   function pattern(w, h, paint) {
@@ -436,6 +452,7 @@ window.StreetPedestrian = (function () {
     head.rotation.y = -.08;
     root.add(head);
     root.scale.setScalar(1.19);
+    addContactShadow(root);
     root.userData = {
       kind: 'person', head: head, leftArm: leftArm, rightArm: rightArm, restingArm: .095,
       faceControls: buildFace(head,m),
@@ -571,6 +588,7 @@ window.StreetPedestrian = (function () {
     body.add(head);
     buildFace(head,m,style);
     outfits(kind,body,head,arms,m);
+    addContactShadow(root);
     root.userData = { passerby: kind, head: head, arms: arms, legs: legs };
     return root;
   }

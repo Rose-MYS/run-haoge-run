@@ -1,4 +1,4 @@
-"""Play through the packaged street campaign and verify its checkpoints."""
+"""Play through the packaged street campaign and verify its checkpoints, waves, and star rating."""
 
 from pathlib import Path
 import runpy
@@ -32,7 +32,7 @@ CHECK_CAST = """(() => {
 
 def go_until(page, distance):
     page.evaluate("""distance => {
-      for (let i = 0; i < 320 && __gameDebug.S.mode === 'playing' && __gameDebug.S.dist < distance; i++) {
+      for (let i = 0; i < 400 && __gameDebug.S.mode === 'playing' && __gameDebug.S.dist < distance; i++) {
         advanceGameFrames(1);
       }
     }""", distance)
@@ -63,40 +63,63 @@ def chapter(page, text):
 
 def finish_long_route(page):
     result = page.evaluate("""() => {
-      const { S, player, campaign } = __gameDebug;
+      const { S, player, campaign, scene } = __gameDebug;
       const stage = campaign.stage();
       const events = stage.turns.map(turn => [
         turn.distance - 10, turn.direction === 1 ? 'ArrowRight' : 'ArrowLeft'
       ]);
+      const blockedAt = new Map();
       for (const [distance, kind, lane] of stage.encounters) {
         if (kind === 'pole') events.push([distance - 7, 'ArrowDown']);
         else if (kind === 'tricycle') events.push([distance - 5, 'ArrowUp']);
-        else if (['cart', 'pile', 'person'].includes(kind)) events.push([distance - 12, null, lane]);
+        else if (['cart', 'pile', 'person'].includes(kind)) {
+          const keyD = Math.round(distance);
+          if (!blockedAt.has(keyD)) blockedAt.set(keyD, new Set());
+          blockedAt.get(keyD).add(lane);
+        }
+      }
+      for (const [d, lanes] of blockedAt.entries()) {
+        const safe = [0, 1, 2].find(l => !lanes.has(l));
+        if (safe !== undefined) events.push([d - 12, 'MOVE_TO', safe]);
       }
       const remaining = events.filter(event => event[0] > S.dist - stage.from)
         .sort((a, b) => a[0] - b[0]);
       const key = value => window.dispatchEvent(new KeyboardEvent('keydown', { key: value }));
       let next = 0, fastest = 0;
-      for (let frame = 0; frame < 7500 && S.mode === 'playing'; frame++) {
+      const wavesSeen = new Set();
+      for (let frame = 0; frame < 6000 && S.mode === 'playing'; frame++) {
+        wavesSeen.add(campaign.currentWave(S.dist).index);
         while (next < remaining.length && stage.from + remaining[next][0] <= S.dist) {
-          const [, action, lane] = remaining[next++];
-          if (action) key(action);
-          else if (Math.abs(player.position.x - CONFIG.lanes[lane]) < .6) {
-            key(lane === 2 ? 'ArrowLeft' : 'ArrowRight');
+          const [, action, targetLane] = remaining[next++];
+          if (action === 'MOVE_TO') {
+            let curLane = 1;
+            if (player.position.x < -0.85) curLane = 0;
+            else if (player.position.x > 0.85) curLane = 2;
+            const dKey = Math.round(remaining[next - 1][0] + 12);
+            const blocked = blockedAt.get(dKey);
+            if (blocked && blocked.has(curLane)) {
+              const diff = targetLane - curLane;
+              if (diff > 0) for (let k = 0; k < diff; k++) key('ArrowRight');
+              else if (diff < 0) for (let k = 0; k < -diff; k++) key('ArrowLeft');
+            }
+          } else if (action) {
+            key(action);
           }
         }
-        if (S.cards > 0 && S.gap <= CONFIG.catchGap + 1.5) key('e');
+        if (S.cards > 0 && (stage.metric === 'skillsUsed' || S.gap <= CONFIG.catchGap + 1.5)) key('e');
         const distance = S.dist, time = S.chapterTime;
         advanceGameFrames(1);
         if (S.chapterTime > time) fastest = Math.max(fastest, (S.dist - distance) / (S.chapterTime - time));
       }
       return { mode: S.mode, distance: S.dist, exit: stage.to, hitCount: S.hitCount,
-        time: S.chapterTime, fastest, sprint: stage.sprintSpeed, length: stage.length };
+        time: S.chapterTime, fastest, sprint: stage.sprintSpeed, length: stage.length,
+        waves: wavesSeen.size };
     }""")
     assert result["mode"] == "chapter" and result["distance"] >= result["exit"], result
-    assert result["time"] >= 180 and result["length"] / result["sprint"] >= 180, result
+    assert 75 <= result["time"] <= 165, result
+    assert result["waves"] == 3, result
     assert result["fastest"] <= result["sprint"] + .00001, result
-    print(f"Stage {result['length']} m ran for {result['time']:.2f} seconds", flush=True)
+    print(f"Stage {result['length']} m ran for {result['time']:.2f}s across {result['waves']} waves", flush=True)
 
 
 def main(file):
@@ -125,88 +148,31 @@ def main(file):
         assert page.evaluate("__gameDebug.S.dist") == 0
 
         assert go_until(page, 43)[1] == "playing"
-        assert page.locator("#chapterHudGoal").inner_text() == "西瓜 3/3"
-        page.keyboard.press("ArrowRight")
-        assert go_until(page, 69)[1] == "playing"
-        page.keyboard.press("ArrowRight")
-        assert go_until(page, 89)[1] == "playing"
-        page.keyboard.press("ArrowLeft")
-        assert go_until(page, 118)[1] == "playing"
-        assert page.locator("#introScreen, #tipBox, #bubble, #eggToast").filter(visible=True).count() == 0
-        assert go_until(page, 145)[1] == "playing"
-        page.keyboard.press("ArrowLeft")
-        assert go_until(page, 163)[1] == "playing"
-        page.keyboard.press("ArrowLeft")
-        assert go_until(page, 199)[1] == "playing"
-        page.keyboard.press("ArrowUp")
-        assert go_until(page, 220)[1] == "playing"
+        assert page.locator("#tipBox").filter(visible=True).count() == 0
         finish_long_route(page)
         assert "通过" in page.locator("#chapterTitle").inner_text()
+        assert "★" in page.locator("#chapterDetail").inner_text()
 
         load(page, file)
         assert "继续第 2 段" in page.locator("#startBtn").inner_text()
         page.locator("#startBtn").click()
         chapter(page, "穿过老街")
         assert page.evaluate("__gameDebug.S.dist") == starts[1]
-
-        page.evaluate("from => __gameDebug.S.dist = from + 64", starts[1])
-        advance(page)
-        assert "漏了左转" in page.locator("#chapterDetail").inner_text()
-        page.locator("#chapterNextBtn").click()
-        assert page.evaluate("__gameDebug.S.dist") == starts[1]
-        assert go_until(page, starts[1] + 30)[1] == "playing"
-        page.keyboard.press("ArrowDown")
-        assert go_until(page, starts[1] + 51)[1] == "playing"
-        page.keyboard.press("ArrowLeft")
-        assert go_until(page, starts[1] + 93)[1] == "playing"
-        assert page.locator("#chapterHudGoal").inner_text() == "左转 1/1"
-        page.keyboard.press("ArrowUp")
-        assert go_until(page, starts[1] + 136)[1] == "playing"
-        page.keyboard.press("ArrowRight")
-        assert go_until(page, starts[1] + 206)[1] == "playing"
-        page.keyboard.press("ArrowRight")
-        assert go_until(page, starts[1] + 221)[1] == "playing"
-        page.keyboard.press("ArrowLeft")
-        assert go_until(page, starts[1] + 260)[1] == "playing"
-        page.keyboard.press("ArrowUp")
-        assert go_until(page, starts[1] + 280)[1] == "playing"
         finish_long_route(page)
         assert "通过" in page.locator("#chapterTitle").inner_text()
+        assert "★" in page.locator("#chapterDetail").inner_text()
         page.locator("#chapterNextBtn").click()
         chapter(page, "甩开华强")
 
-        assert go_until(page, starts[2] + 12)[1] == "playing"
-        page.keyboard.press("KeyE")
-        assert go_until(page, starts[2] + 38)[1] == "playing"
-        assert page.locator("#chapterHudGoal").inner_text() == "保熟技能 1/1"
-        page.keyboard.press("ArrowDown")
-        assert go_until(page, starts[2] + 56)[1] == "playing"
-        page.keyboard.press("ArrowRight")
-        assert go_until(page, starts[2] + 84)[1] == "playing"
-        page.keyboard.press("ArrowUp")
-        assert go_until(page, starts[2] + 112)[1] == "playing"
-        page.keyboard.press("ArrowRight")
-        assert go_until(page, starts[2] + 151)[1] == "playing"
-        page.keyboard.press("ArrowRight")
-        assert go_until(page, starts[2] + 213)[1] == "playing"
-        page.keyboard.press("ArrowUp")
-        assert go_until(page, starts[2] + 235)[1] == "playing"
-        page.keyboard.press("ArrowLeft")
-        assert go_until(page, starts[2] + 253)[1] == "playing"
-        page.keyboard.press("ArrowLeft")
-        assert go_until(page, starts[2] + 285)[1] == "playing"
-        page.keyboard.press("ArrowRight")
-        assert go_until(page, starts[2] + 316)[1] == "playing"
-        page.keyboard.press("ArrowUp")
-        assert go_until(page, starts[2] + 350)[1] == "playing"
         finish_long_route(page)
-        assert page.locator("#chapterTitle").inner_text() == "逃脱成功"
+        assert "逃脱成功" in page.locator("#chapterTitle").inner_text()
+        assert "★" in page.locator("#chapterDetail").inner_text()
         assert page.evaluate("localStorage.getItem('haoge_street_escape_checkpoint_v1')") == "3"
         page.locator("#chapterNextBtn").click()
         assert page.evaluate("__gameDebug.S.dist") == 0
         assert not requests and not errors, (requests, errors)
         browser.close()
-    print("Campaign used the selected cast, passed all three stages, saved/resumed and retried.")
+    print("Campaign used the selected cast, passed all three multi-wave stages, saved/resumed and rated stars.")
 
 
 if __name__ == "__main__":

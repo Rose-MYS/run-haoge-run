@@ -553,30 +553,50 @@ window.Runners = (function () {
 
   function makeKnife() {
     var g = new THREE.Group();
-    var handle = mesh(new THREE.CylinderGeometry(0.025, 0.022, 0.22, 8), M.wood);
-    handle.rotation.x = Math.PI / 2;
-    handle.position.set(0, 0, -0.14);
-    g.add(handle);
-    var pommel = sphere(0.028, M.wood, 6);
-    pommel.position.set(0, 0, -0.25);
-    g.add(pommel);
-    var guard = roundBox(0.09, 0.13, 0.03, { mat: M.metalDark, r: 0.01 });
-    guard.position.set(0, 0.015, 0.005);
-    g.add(guard);
+    var woodMat = std(0x5c341d, { roughness: 0.72, metalness: 0.04 });
+    var bolsterMat = std(0x7c8590, { roughness: 0.32, metalness: 0.75 });
+    var bladeMat = std(0xd8e0e8, { roughness: 0.22, metalness: 0.85 });
+    var edgeMat = std(0xf4f8fc, { roughness: 0.14, metalness: 0.92 });
 
-    var bladeShape = new THREE.Shape();
-    bladeShape.moveTo(-0.02, 0);
-    bladeShape.lineTo(-0.013, 0.26);
-    bladeShape.quadraticCurveTo(0, 0.36, 0.013, 0.26);
-    bladeShape.lineTo(0.02, 0);
-    bladeShape.quadraticCurveTo(0, -0.014, -0.02, 0);
-    var bladeGeo = new THREE.ExtrudeGeometry(bladeShape, { depth: 0.022, bevelEnabled: false, curveSegments: 6 });
-    bladeGeo.rotateX(-Math.PI / 2);
-    bladeGeo.translate(0, 0.011, 0);
-    var blade = mesh(bladeGeo, M.metal);
-    blade.position.set(0, 0.015, 0.03);
+    var handle = mesh(new THREE.BoxGeometry(0.024, 0.034, 0.18), woodMat);
+    handle.position.set(0, 0, -0.09);
+    g.add(handle);
+
+    var bolster = mesh(new THREE.BoxGeometry(0.026, 0.042, 0.022), bolsterMat);
+    bolster.position.set(0, 0, 0.005);
+    g.add(bolster);
+
+    var s = new THREE.Shape();
+    s.moveTo(0.014, -0.026);
+    s.lineTo(0.17, -0.034);
+    s.quadraticCurveTo(0.34, -0.040, 0.42, -0.016);
+    s.quadraticCurveTo(0.45, 0.006, 0.455, 0.022);
+    s.lineTo(0.37, 0.034);
+    s.lineTo(0.014, 0.030);
+    s.closePath();
+
+    var bladeGeo = new THREE.ExtrudeGeometry(s, { depth: 0.008, bevelEnabled: false, curveSegments: 8 });
+    bladeGeo.rotateY(-Math.PI / 2);
+    bladeGeo.translate(0.004, 0, 0);
+    var blade = mesh(bladeGeo, bladeMat);
     g.add(blade);
-    g.userData = { blade: blade };
+
+    var es = new THREE.Shape();
+    es.moveTo(0.016, -0.026);
+    es.lineTo(0.17, -0.034);
+    es.quadraticCurveTo(0.34, -0.040, 0.42, -0.016);
+    es.quadraticCurveTo(0.446, 0.002, 0.454, 0.020);
+    es.lineTo(0.415, -0.009);
+    es.quadraticCurveTo(0.33, -0.030, 0.17, -0.025);
+    es.lineTo(0.016, -0.018);
+    es.closePath();
+    var edgeGeo = new THREE.ExtrudeGeometry(es, { depth: 0.009, bevelEnabled: false, curveSegments: 8 });
+    edgeGeo.rotateY(-Math.PI / 2);
+    edgeGeo.translate(0.0045, 0, 0);
+    var edge = mesh(edgeGeo, edgeMat);
+    g.add(edge);
+
+    g.userData = { blade: blade, edge: edge };
     return g;
   }
 

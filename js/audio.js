@@ -194,5 +194,18 @@ window.AppAudio = (function () {
       noise(0.18, 0.28);
     },
     ui: function () { tone(600, 0.08, 'sine', 0.1, 800); },
+    perfectTurn: function () {
+      tone(587.33, 0.09, 'triangle', 0.14);
+      setTimeout(function () { tone(880, 0.14, 'triangle', 0.14); }, 65);
+    },
+    comboTick: function (combo) {
+      var step = Math.min(8, Math.max(0, (combo || 1) - 1));
+      tone(740 + step * 65, 0.09, 'sine', 0.13);
+    },
+    waveUp: function () {
+      tone(440, 0.10, 'triangle', 0.13);
+      setTimeout(function () { tone(554.37, 0.10, 'triangle', 0.13); }, 85);
+      setTimeout(function () { tone(659.25, 0.18, 'triangle', 0.15); }, 170);
+    },
   };
 })();

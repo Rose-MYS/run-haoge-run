@@ -6,7 +6,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 <title>郝哥快跑 · 这瓜保熟吗？</title>
 <link rel="stylesheet" href="css/style.css">
-<link rel="stylesheet" href="css/street-ui.css?v=2">
+<link rel="stylesheet" href="css/street-ui.css?v=3">
 <script>
   window.HAOGE_SOURCE_ONLY = true;
   window.HAOGE_CAMPAIGN = new URLSearchParams(location.search).get('campaign') !== '0';
@@ -95,8 +95,11 @@
     <div class="subtitle">这瓜保熟吗？</div>
     <div class="best-line">历史最高 <span id="bestStart">0</span></div>
     <button id="startBtn" class="btn">开始跑！</button>
-    <button id="eggBtn" class="btn btn-small">彩蛋图鉴</button>
-    <button id="helpBtn" class="btn btn-small">玩法说明</button>
+    <div class="menu-sub-actions">
+      <button id="eggBtn" class="btn btn-small">彩蛋图鉴</button>
+      <button id="helpBtn" class="btn btn-small">玩法说明</button>
+      <button id="modeSwitchBtn" class="btn btn-small">切换模式</button>
+    </div>
     <button id="chapterNewRun" class="btn btn-small" hidden>从第一段开始</button>
   </div>
 </div>
@@ -199,8 +202,8 @@
 <script src="js/vendor/three.min.js?v=3"></script>
 <script src="js/vendor/GLTFLoader.js?v=3"></script>
 <script src="js/config.js?v=3"></script>
-<script src="js/audio.js?v=3"></script>
-<script src="js/characters.js?v=3"></script>
+<script src="js/audio.js?v=4"></script>
+<script src="js/characters.js?v=4"></script>
 <script src="js/toon.js?v=3"></script>
 <script>
   if (window.HAOGE_CAMPAIGN) {
@@ -211,17 +214,19 @@
   }
 </script>
 <script src="assets/published/cast.js?v=409eea5c-4f100e46"></script>
-<script src="js/models.js?v=5"></script>
+<script src="js/models.js?v=6"></script>
 <script src="js/animations.js?v=3"></script>
 <script src="js/obstacles.js?v=3"></script>
-<script src="js/street-pedestrian.js?v=2"></script>
+<script src="js/street-pedestrian.js?v=3"></script>
 <script src="js/street-crowd.js?v=3"></script>
 <script src="js/street-items.js?v=1"></script>
 <script src="js/model-switch.js?v=3"></script>
 <script src="js/street-art.js?v=4"></script>
 <script src="js/street-route.js?v=4"></script>
-<script src="js/street-campaign.js?v=3"></script>
+<script src="js/street-campaign.js?v=4"></script>
 <script src="js/street-cast.js?v=1"></script>
-<script src="js/game.js?v=6"></script>
+<script src="js/street-bgm.js?v=1"></script>
+<script src="js/street-feedback.js?v=1"></script>
+<script src="js/game.js?v=7"></script>
 </body>
 </html>

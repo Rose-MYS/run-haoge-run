@@ -24,8 +24,8 @@ window.RunnerModels = (function () {
   // —— 开发期郝哥模型切换（临时调试用，定稿后可删除本段 + setHaogePack 相关导出）——
   var HAOGE_PACKS = [
     { id: 'v1', label: '现役 v1（haoge.glb）', url: MODEL_URLS.haoge, desc: '主建模agent2.0 早期交付，17.7MB，含 run/jump/roll/fall/die 动画' },
-    { id: 'meshy-fixed', label: 'Meshy7-fixed', url: 'assets/models/haoge-meshy7-fixed.glb', desc: 'Meshy 出模修整版，26.8MB，含全套动画' },
-    { id: 'meshy-merged', label: 'Meshy7-merged', url: 'assets/models/haoge-meshy7-merged.glb', desc: 'Meshy 出模合辑版，26.8MB，含全套动画' },
+    { id: 'meshy-fixed', label: 'Meshy7-fixed', url: 'assets/models/_archive/haoge-meshy7-fixed.glb', desc: 'Meshy 出模修整版，26.8MB，含全套动画' },
+    { id: 'meshy-merged', label: 'Meshy7-merged', url: 'assets/models/_archive/haoge-meshy7-merged.glb', desc: 'Meshy 出模合辑版，26.8MB，含全套动画' },
   ];
   function haogePackUrl() {
     var active = activeHaogePackId();
@@ -478,20 +478,63 @@ window.RunnerModels = (function () {
 
   function makeKnife(scale, inv) {
     var g = new THREE.Group();
-    var handle = mesh(new THREE.CylinderGeometry(0.028 * inv, 0.024 * inv, 0.24 * inv, 8), std(0x8a5a33));
-    handle.rotation.x = Math.PI / 2;
-    handle.position.set(0, 0, -0.13 * inv);
+    var woodMat = std(0x5c341d, { roughness: 0.72, metalness: 0.04 });
+    var bolsterMat = std(0x7c8590, { roughness: 0.32, metalness: 0.75 });
+    var bladeMat = std(0xd8e0e8, { roughness: 0.22, metalness: 0.85 });
+    var edgeMat = std(0xf4f8fc, { roughness: 0.14, metalness: 0.92 });
+    var rivetMat = std(0xd0d7df, { roughness: 0.28, metalness: 0.82 });
+
+    // Wooden handle along -Z; hand grips around z = -0.09 * inv
+    var handle = mesh(new THREE.BoxGeometry(0.026 * inv, 0.036 * inv, 0.19 * inv), woodMat);
+    handle.position.set(0, 0, -0.095 * inv);
     g.add(handle);
-    var pommel = mesh(new THREE.SphereGeometry(0.032 * inv, 6, 5), std(0x8a5a33));
-    pommel.position.set(0, 0, -0.26 * inv);
-    g.add(pommel);
-    var guard = mesh(new THREE.BoxGeometry(0.11 * inv, 0.032 * inv, 0.14 * inv), std(0x5d636c, { roughness: 0.35, metalness: 0.7 }));
-    guard.position.set(0, 0, -0.01 * inv);
-    g.add(guard);
-    var blade = mesh(new THREE.BoxGeometry(0.06 * inv, 0.36 * inv, 0.02 * inv), std(0x9aa2ad, { roughness: 0.25, metalness: 0.9 }));
-    blade.position.set(0, 0.04 * inv, 0.13 * inv);
+
+    for (var r = 0; r < 3; r++) {
+      var rivet = mesh(new THREE.CylinderGeometry(0.0045 * inv, 0.0045 * inv, 0.029 * inv, 8), rivetMat);
+      rivet.rotation.z = Math.PI / 2;
+      rivet.position.set(0, 0, (-0.045 - r * 0.048) * inv);
+      g.add(rivet);
+    }
+
+    // Narrow steel bolster/ferrule at the base of the blade (no wide Western crossguard)
+    var bolster = mesh(new THREE.BoxGeometry(0.028 * inv, 0.044 * inv, 0.024 * inv), bolsterMat);
+    bolster.position.set(0, 0, 0.005 * inv);
+    g.add(bolster);
+
+    // Chinese watermelon knife blade extending along +Z, spine at +Y, sharp edge at -Y
+    var s = new THREE.Shape();
+    s.moveTo(0.014 * inv, -0.028 * inv);
+    s.lineTo(0.18 * inv, -0.036 * inv);
+    s.quadraticCurveTo(0.36 * inv, -0.042 * inv, 0.44 * inv, -0.018 * inv);
+    s.quadraticCurveTo(0.47 * inv, 0.006 * inv, 0.475 * inv, 0.024 * inv);
+    s.lineTo(0.39 * inv, 0.036 * inv);
+    s.lineTo(0.014 * inv, 0.032 * inv);
+    s.closePath();
+
+    var bladeGeo = new THREE.ExtrudeGeometry(s, { depth: 0.008 * inv, bevelEnabled: false, curveSegments: 8 });
+    bladeGeo.rotateY(-Math.PI / 2);
+    bladeGeo.translate(0.004 * inv, 0, 0);
+    var blade = mesh(bladeGeo, bladeMat);
     g.add(blade);
-    g.userData = { blade: blade };
+
+    // Bright sharpened edge strip along the bottom (-Y) cutting edge
+    var es = new THREE.Shape();
+    es.moveTo(0.016 * inv, -0.028 * inv);
+    es.lineTo(0.18 * inv, -0.036 * inv);
+    es.quadraticCurveTo(0.36 * inv, -0.042 * inv, 0.44 * inv, -0.018 * inv);
+    es.quadraticCurveTo(0.466 * inv, 0.002 * inv, 0.474 * inv, 0.021 * inv);
+    es.lineTo(0.435 * inv, -0.010 * inv);
+    es.quadraticCurveTo(0.35 * inv, -0.032 * inv, 0.18 * inv, -0.027 * inv);
+    es.lineTo(0.016 * inv, -0.020 * inv);
+    es.closePath();
+
+    var edgeGeo = new THREE.ExtrudeGeometry(es, { depth: 0.009 * inv, bevelEnabled: false, curveSegments: 8 });
+    edgeGeo.rotateY(-Math.PI / 2);
+    edgeGeo.translate(0.0045 * inv, 0, 0);
+    var edge = mesh(edgeGeo, edgeMat);
+    g.add(edge);
+
+    g.userData = { blade: blade, edge: edge };
     return g;
   }
 
@@ -772,11 +815,11 @@ window.RunnerModels = (function () {
     control('rightLeg', 'RightUpLeg');
     var hand = model.getObjectByName('RightHand');
     var knife = makeKnife(scale, inv);
-    knife.position.set(0, 0.08, 0);
-    knife.rotation.x = 0.25;
-    knife.translateZ(0.13 * inv);
+    knife.position.set(-0.01 * inv, 0.035 * inv, -0.025 * inv);
+    knife.rotation.set(Math.PI + 0.18, 0, -0.22);
     hand.add(knife);
     body.knifeBlade = knife.userData.blade;
+    body.knifeEdge = knife.userData.edge;
     body.faceKind = 'huaqiang';
     body.faceMorphs = skin.morphTargetInfluences;
     body.applyManualPose = function () {
@@ -1104,14 +1147,18 @@ window.RunnerModels = (function () {
   }
 
   function setBloodyKnife(runner, on) {
-    var blade = runner && runner.userData && runner.userData.knifeBlade;
-    if (!blade) return;
-    if (!blade.userData.bloodMat) {
-      blade.userData.origMat = blade.material;
-      blade.userData.bloodMat = blade.material.clone();
-      blade.userData.bloodMat.color.set(0x9e1b1b);
+    var u = runner && runner.userData;
+    var parts = [u && u.knifeBlade, u && u.knifeEdge];
+    for (var i = 0; i < parts.length; i++) {
+      var part = parts[i];
+      if (!part) continue;
+      if (!part.userData.bloodMat) {
+        part.userData.origMat = part.material;
+        part.userData.bloodMat = part.material.clone();
+        part.userData.bloodMat.color.set(0x9e1b1b);
+      }
+      part.material = on ? part.userData.bloodMat : part.userData.origMat;
     }
-    blade.material = on ? blade.userData.bloodMat : blade.userData.origMat;
   }
 
   function update(dt) {

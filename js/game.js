@@ -109,7 +109,8 @@
   if (streetPreview) sun.position.set(8, 12, 5.5);
   else sun.position.set(8, 14, 6);
   sun.castShadow = true;
-  sun.shadow.mapSize.set(2048, 2048);
+  var shadowSize = coarsePointer ? 1024 : 2048;
+  sun.shadow.mapSize.set(shadowSize, shadowSize);
   sun.shadow.bias = -0.0005;
   sun.shadow.camera.left = -12;
   sun.shadow.camera.right = 12;
@@ -1506,6 +1507,11 @@
     golds: 0,
     goldCombo: 0,
     goldComboT: 0,
+    melonCombo: 0,
+    melonComboT: 0,
+    turnBoostT: 0,
+    campaignCatchT: 0,
+    runElapsed: 0,
     certs: 0,
     cards: 0,
     gap: CONFIG.startGap,
@@ -1662,7 +1668,6 @@
   }
 
   function showEggToast(name) {
-    if (campaign) return;
     el.eggToast.textContent = '彩蛋解锁：' + name;
     if (eggToastTimer) {
       clearTimeout(eggToastTimer);
@@ -1839,7 +1844,13 @@
       el.chaseFill.style.width = Math.round(gapNorm * 100) + '%';
       el.chaseFill.style.background = S.gap > CONFIG.dangerGap ? '#4ade80' : (S.gap > CONFIG.catchGap + 0.8 ? '#facc15' : '#ef4444');
     }
-    if (campaign) campaign.updateHud(S);
+    if (campaign) {
+      campaign.updateHud(S, function (waveNum, waveInfo) {
+        if (window.StreetBGM) window.StreetBGM.setWave(waveNum);
+        if (window.AppAudio && window.AppAudio.waveUp) window.AppAudio.waveUp();
+        if (window.StreetFeedback) window.StreetFeedback.pop('第 ' + waveNum + ' 波 · ' + waveInfo.name, 'wave');
+      });
+    }
   }
 
   function updateSkillHUD() {
@@ -2109,7 +2120,6 @@
 
   var bubbleTimerId = null;
   function showBubble(text, big) {
-    if (campaign) return;
     el.bubble.textContent = text;
     el.bubble.classList.toggle('big', !!big);
     el.bubble.classList.remove('hidden');
@@ -2597,8 +2607,10 @@
 
   function currentMoveSpeed(chapter) {
     var limit = chapter ? Math.min(CONFIG.maxSpeed, chapter.sprintSpeed) : CONFIG.maxSpeed;
-    var boost = S.speedBoostT > 0 ? CONFIG.skillBoostSpeed : 0;
-    return Math.min(limit, S.speed + boost);
+    var waveMult = (chapter && campaign && campaign.currentWave)
+      ? campaign.currentWave(S.dist).info.mult : 1;
+    var boost = (S.speedBoostT > 0 ? CONFIG.skillBoostSpeed : 0) + (S.turnBoostT > 0 ? 1.8 : 0);
+    return Math.min(limit, S.speed * waveMult + boost);
   }
 
   function spawnTricycle(z) {
@@ -2783,8 +2795,13 @@
 
   /* ---------------- 操作 ---------------- */
   function moveLane(dir, repeated) {
-    if (S.mode !== 'playing' || P.mode === 'caught') return;
-    if (streetRoute && !repeated && streetRoute.input(dir, S.dist)) return;
+    if (S.mode !== 'playing' || P.mode === 'caught' || S.campaignCatchT > 0) return;
+    if (streetRoute && !repeated && streetRoute.input(dir, S.dist)) {
+      S.turnBoostT = 0.7;
+      if (window.AppAudio && window.AppAudio.perfectTurn) window.AppAudio.perfectTurn();
+      if (window.StreetFeedback) window.StreetFeedback.pop('完美转弯！', 'turn');
+      return;
+    }
     var nl = Math.max(0, Math.min(2, P.lane + dir));
     if (nl !== P.lane) {
       P.lane = nl;
@@ -2952,6 +2969,7 @@
         S.goldComboT = CONFIG.goldComboWindow;
         if (S.goldCombo >= 3) unlockEgg('goldCombo3');
         window.AppAudio.gold();
+        if (window.StreetFeedback) window.StreetFeedback.pop('+20 金西瓜', 'gold');
         if (S.goldCombo >= 2) {
           var comboN = S.goldCombo;
           window.AppAudio.playVoiceChain('jinxigua', comboN, 180);
@@ -2972,6 +2990,7 @@
           window.AppAudio.cert();
           showBubble('这瓜保熟吗？', true);
           window.AppAudio.playVoice('baoshu');
+          if (window.StreetFeedback) window.StreetFeedback.pop('保熟卡 +1', 'gold');
         } else {
           window.AppAudio.collect();
           showBubble('保熟卡已满！', false);
@@ -2979,7 +2998,13 @@
         updateSkillHUD();
       } else {
         S.melons++;
-        window.AppAudio.collect();
+        S.melonCombo++;
+        S.melonComboT = 2.2;
+        if (window.AppAudio.comboTick) window.AppAudio.comboTick(S.melonCombo);
+        else window.AppAudio.collect();
+        if (window.StreetFeedback) {
+          window.StreetFeedback.pop(S.melonCombo >= 3 ? '连击 ×' + S.melonCombo : '+1', null);
+        }
       }
       S.score = calcScore();
       updateHUD();
@@ -3313,7 +3338,15 @@
 
   function gameOver() {
     if (campaign) {
-      finishChapter('caught');
+      if (S.campaignCatchT > 0) return;
+      S.campaignCatchT = 1.15;
+      S.shake = 0.65;
+      S.flash = 0.75;
+      P.mode = 'caught';
+      window.AppAudio.caught();
+      window.AppAudio.playVoice('baoshu');
+      showBubble('华强：这瓜保熟吗？！', true);
+      if (window.StreetBGM) window.StreetBGM.stop();
       return;
     }
     S.mode = 'gameover';
@@ -3423,6 +3456,11 @@
     S.golds = 0;
     S.goldCombo = 0;
     S.goldComboT = 0;
+    S.melonCombo = 0;
+    S.melonComboT = 0;
+    S.turnBoostT = 0;
+    S.campaignCatchT = 0;
+    S.runElapsed = 0;
     S.certs = 0;
     S.cards = 0;
     S.seenKinds = {};
@@ -3593,6 +3631,7 @@
     speechBubble.visible = false;
     sarilangFxT = 0;
     haogeTag.visible = true;
+    haogeTag.material.opacity = 1;
     huaqiangTag.visible = true;
     xiaoDiTag.visible = true;
     window.Runners.setFace(huaQiang, 'huaqiang');
@@ -3625,6 +3664,13 @@
     show('hud');
     updateSkillHUD();
     updateHUD();
+    if (window.StreetFeedback) window.StreetFeedback.reset();
+    if (window.StreetBGM) {
+      window.StreetBGM.setWave(1);
+      window.StreetBGM.setTension(0);
+      window.StreetBGM.setMuted(window.AppAudio.isMuted());
+      window.StreetBGM.start();
+    }
   }
 
   function spawnChapterItem(kind, lane, z, height) {
@@ -3640,10 +3686,15 @@
   function finishChapter(reason) {
     if (S.mode !== 'playing') return;
     S.mode = 'chapter';
+    S.campaignCatchT = 0;
     cleanupPigua();
     P.mode = 'run';
     playerBody.visible = true;
+    haogeTag.visible = true;
+    haogeTag.material.opacity = 1;
     window.AppAudio.stop();
+    if (window.StreetBGM) window.StreetBGM.stop();
+    if (window.StreetFeedback) window.StreetFeedback.reset();
     hide('hud');
     hide('bubble');
     hideTip();
@@ -3669,6 +3720,23 @@
       S.goldComboT -= dt;
       if (S.goldComboT <= 0) S.goldCombo = 0;
     }
+    if (S.melonComboT > 0) {
+      S.melonComboT -= dt;
+      if (S.melonComboT <= 0) S.melonCombo = 0;
+    }
+    if (S.turnBoostT > 0) S.turnBoostT = Math.max(0, S.turnBoostT - dt);
+    if (S.campaignCatchT > 0) {
+      S.campaignCatchT -= dt;
+      if (S.campaignCatchT <= 0) finishChapter('caught');
+      return;
+    }
+    if (S.mode === 'playing') {
+      S.runElapsed += dt;
+      if (S.runElapsed > 2.5 && haogeTag.visible) {
+        haogeTag.material.opacity = Math.max(0, haogeTag.material.opacity - dt * 1.8);
+        if (haogeTag.material.opacity <= 0.02) haogeTag.visible = false;
+      }
+    }
     if (S.tipTimer > 0) {
       S.tipTimer -= dt;
       if (S.tipTimer <= 0) maybeTip('lane', '左右滑动或 A/D 换道，躲开障碍');
@@ -3692,10 +3760,7 @@
     if (streetRoute) {
       streetRoute.update(S.dist, function (turn) {
         if (turn.practice) return;
-        if (campaign && turn.required) {
-          finishChapter('missedTurn');
-          return;
-        }
+        if (campaign && campaign.missedTurn) campaign.missedTurn();
         if (S.skillT <= 0 && P.invuln <= 0 && P.mode !== 'fall') playHit();
       }, campaign && campaign.turned);
       if (S.mode !== 'playing') return;
@@ -3876,12 +3941,19 @@
       if (!tryEnterLastChance()) gameOver();
     }
 
-    if (!campaign) {
-      if (S.dist >= 100) unlockEgg('dist100');
-      if (S.dist >= 500) unlockEgg('dist500');
-      if (S.dist >= 1000) unlockEgg('dist1000');
-      if (S.dist >= 2000) unlockEgg('dist2000');
-      if (S.dist >= 300 && S.hitCount <= 0) unlockEgg('noHit300');
+    var stageDist = S.dist - (campaign ? campaign.stage().from : 0);
+    if (stageDist >= 100) unlockEgg('dist100');
+    if (stageDist >= 500) unlockEgg('dist500');
+    if (stageDist >= 1000) unlockEgg('dist1000');
+    if (stageDist >= 2000) unlockEgg('dist2000');
+    if (stageDist >= 300 && S.hitCount <= 0) unlockEgg('noHit300');
+
+    var dangerRatio = Math.max(0, Math.min(1, (CONFIG.dangerGap - S.gap) / Math.max(0.1, CONFIG.dangerGap - CONFIG.catchGap)));
+    if (window.StreetBGM) window.StreetBGM.setTension(dangerRatio);
+    if (window.StreetFeedback) {
+      window.StreetFeedback.setSpeedLines(S.speedBoostT > 0 || S.turnBoostT > 0);
+      var pulse = dangerRatio > 0 ? dangerRatio * (0.65 + 0.35 * Math.sin(S.time * (8 + dangerRatio * 8))) : 0;
+      window.StreetFeedback.setDanger(pulse);
     }
 
     updateHUD();
@@ -4578,6 +4650,12 @@
       camera.position.z += (targetZ - camera.position.z) * Math.min(1, dt * 5);
     }
     camera.lookAt(lookX, lookY, lookZ);
+    var baseFov = streetPreview ? 62 : 68;
+    var targetFov = baseFov + ((S.mode === 'playing' && (S.speedBoostT > 0 || S.turnBoostT > 0)) ? 3.2 : 0);
+    if (Math.abs(camera.fov - targetFov) > 0.05) {
+      camera.fov += (targetFov - camera.fov) * Math.min(1, dt * 8);
+      camera.updateProjectionMatrix();
+    }
     el.vignette.style.opacity = Math.min(0.62, tension * 0.2 + S.flash + urgency).toFixed(3);
   }
 
@@ -4654,6 +4732,7 @@
   function toggleMute() {
     var muted = window.AppAudio.toggle();
     el.muteBtn.textContent = muted ? '🔇' : '🔊';
+    if (window.StreetBGM) window.StreetBGM.setMuted(muted);
   }
 
   function setPaused(paused) {
@@ -4663,12 +4742,14 @@
       show('pauseScreen');
       el.pauseBtn.textContent = '▶';
       window.AppAudio.ui();
+      if (window.StreetBGM) window.StreetBGM.setPaused(true);
     } else {
       if (S.mode !== 'paused') return;
       S.mode = 'playing';
       hide('pauseScreen');
       el.pauseBtn.textContent = '⏸';
       window.AppAudio.ui();
+      if (window.StreetBGM) window.StreetBGM.setPaused(false);
     }
   }
 
@@ -4684,6 +4765,19 @@
       startGame();
     });
     el.pauseRestartBtn.textContent = '重试本段';
+  }
+  var modeSwitchBtn = document.getElementById('modeSwitchBtn');
+  if (modeSwitchBtn) {
+    if (window.HAOGE_CAMPAIGN && !window.HAOGE_SOURCE_ONLY && location.protocol === 'file:') {
+      modeSwitchBtn.hidden = true;
+    } else {
+      modeSwitchBtn.textContent = campaign ? '切到无尽模式' : '切到分段逃脱';
+      modeSwitchBtn.addEventListener('click', function () {
+        var nextUrl = new URL(location.href);
+        nextUrl.searchParams.set('campaign', campaign ? '0' : '1');
+        location.href = nextUrl.href;
+      });
+    }
   }
   el.restartBtn.addEventListener('click', startGame);
   el.eggBtn.addEventListener('click', openEggModal);
