@@ -859,10 +859,20 @@ window.RunnerModels = (function () {
     }
 
     bind('head', boneNamesAny('Head').concat(boneNamesAny('Neck')), 0);
+    bind('neck', boneNamesAny('neck').concat(boneNamesAny('Neck')), 0);
+    bind('spine', boneNamesAny('Spine'), 0);
+    bind('chest', boneNamesAny('Spine01').concat(boneNamesAny('Spine1')), 0);
+    bind('upperChest', boneNamesAny('Spine02').concat(boneNamesAny('Spine2')), 0);
     bind('leftArm', boneNamesAny('LeftArm'), -.63);
     bind('rightArm', boneNamesAny('RightArm'), .63);
-    bind('leftLeg', boneNamesAny('LeftUpLeg').concat(boneNamesAny('LeftLeg')), 0);
-    bind('rightLeg', boneNamesAny('RightUpLeg').concat(boneNamesAny('RightLeg')), 0);
+    bind('leftForeArm', boneNamesAny('LeftForeArm'), 0);
+    bind('rightForeArm', boneNamesAny('RightForeArm'), 0);
+    bind('leftLeg', boneNamesAny('LeftUpLeg'), 0);
+    bind('rightLeg', boneNamesAny('RightUpLeg'), 0);
+    bind('leftKnee', boneNamesAny('LeftLeg'), 0);
+    bind('rightKnee', boneNamesAny('RightLeg'), 0);
+    bind('leftFoot', boneNamesAny('LeftFoot'), 0);
+    bind('rightFoot', boneNamesAny('RightFoot'), 0);
     body.clearRigPose = function () {
       for (var i = 0; i < controls.length; i++) controls[i].input.rotation.set(0, 0, 0);
     };

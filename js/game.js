@@ -2849,6 +2849,7 @@
     P.sliding = true;
     P.slideTimer = CONFIG.slideTime;
     window.AppAudio.slide();
+    spawnDust(player.position.x, 0.08, player.position.z + 0.35);
   }
 
   /* ---------------- 碰撞 ---------------- */
@@ -4284,6 +4285,8 @@
     var blend = .085;
     var action = 'run';
     var options = { timeScale: S.mode === 'menu' ? 5 / 8 : (7 + S.speed * .18) / 8, blend: blend };
+    haoGe.rotation.y = Math.PI;
+    haoGe.rotation.z = 0;
     if (S.mode === 'playing') {
       if (P.mode === 'fall') {
         // Sample the ground-level stumble instead of the airborne fall clip.
@@ -4295,17 +4298,37 @@
         haoGe.userData.groundPose = P.grounded;
       } else if (P.sliding && P.grounded) {
         var slide = THREE.MathUtils.clamp(1 - P.slideTimer / CONFIG.slideTime, 0, 1);
-        var weight = THREE.MathUtils.smoothstep(slide, 0, .19) *
-          (1 - THREE.MathUtils.smoothstep(slide, .84, 1));
+        var weight = THREE.MathUtils.smoothstep(slide, 0, .16) *
+          (1 - THREE.MathUtils.smoothstep(slide, .80, 1));
         var rig = haoGe.userData;
         if (rig.currentAction) window.RunnerAnim.freeze(haoGe);
-        // A feet-first slide needs a backwards lean and a quiet upper body.
-        // The imported roll always rotates or raises the torso mid-clip.
-        haoGe.rotation.x = 1.41 * weight;
-        rig.leftArm.rotation.x = -.24 * weight;
-        rig.rightArm.rotation.x = -.31 * weight;
-        rig.leftLeg.rotation.x = -.12 * weight;
-        rig.rightLeg.rotation.x = .16 * weight;
+        // Low baseball-style slide: torso reclined low, chest/head curled forward, lead leg extended horizontally, trail leg tucked.
+        haoGe.rotation.x = 1.36 * weight;
+        haoGe.rotation.y = Math.PI - 0.28 * weight;
+        haoGe.rotation.z = -0.12 * weight;
+        if (rig.spine) rig.spine.rotation.x = 0.28 * weight;
+        if (rig.chest) rig.chest.rotation.x = 0.25 * weight;
+        if (rig.upperChest) rig.upperChest.rotation.x = 0.18 * weight;
+        if (rig.neck) rig.neck.rotation.x = 0.26 * weight;
+        if (rig.head) rig.head.rotation.x = 0.26 * weight;
+
+        rig.leftLeg.rotation.x = -0.30 * weight;
+        if (rig.leftKnee) rig.leftKnee.rotation.x = 0.16 * weight;
+        if (rig.leftFoot) rig.leftFoot.rotation.x = 0.25 * weight;
+
+        rig.rightLeg.rotation.x = -0.32 * weight;
+        rig.rightLeg.rotation.y = -0.32 * weight;
+        rig.rightLeg.rotation.z = 0.45 * weight;
+        if (rig.rightKnee) rig.rightKnee.rotation.x = 1.42 * weight;
+
+        rig.leftArm.rotation.x = -0.35 * weight;
+        rig.leftArm.rotation.z = -0.55 * weight;
+        if (rig.leftForeArm) rig.leftForeArm.rotation.x = -0.35 * weight;
+
+        rig.rightArm.rotation.x = -0.65 * weight;
+        rig.rightArm.rotation.z = 0.35 * weight;
+        if (rig.rightForeArm) rig.rightForeArm.rotation.x = -1.10 * weight;
+
         rig.groundPose = true;
         return;
       } else if (!P.grounded) {
@@ -4678,6 +4701,11 @@
         hide('eggModal');
         return;
       }
+      var vm = $('voiceModal');
+      if (vm && !vm.classList.contains('hidden')) {
+        hide('voiceModal');
+        return;
+      }
       if (S.mode === 'playing' || S.mode === 'paused') togglePause();
       return;
     }
@@ -4786,6 +4814,105 @@
   el.helpClose.addEventListener('click', closeHelpModal);
   el.pauseEggBtn.addEventListener('click', openEggModal);
   el.pauseHelpBtn.addEventListener('click', openHelpModal);
+
+  function renderVoiceList() {
+    var list = $('voiceList');
+    if (!list || !window.AppAudio || !window.AppAudio.listVoices) return;
+    list.innerHTML = '';
+    var items = window.AppAudio.listVoices();
+    for (var i = 0; i < items.length; i++) {
+      (function (item) {
+        var row = document.createElement('div');
+        row.className = 'voice-row';
+        var meta = document.createElement('div');
+        meta.className = 'voice-meta';
+        var name = document.createElement('div');
+        name.className = 'voice-name';
+        name.textContent = item.label;
+        if (item.custom) {
+          var badge = document.createElement('span');
+          badge.className = 'voice-badge';
+          badge.textContent = '已自定义';
+          name.appendChild(badge);
+        } else if (!item.ready) {
+          var miss = document.createElement('span');
+          miss.className = 'voice-badge';
+          miss.textContent = '未加载';
+          name.appendChild(miss);
+        }
+        var trig = document.createElement('div');
+        trig.className = 'voice-trig';
+        trig.textContent = item.trigger;
+        meta.appendChild(name);
+        meta.appendChild(trig);
+
+        var btns = document.createElement('div');
+        btns.className = 'voice-btns';
+        var playBtn = document.createElement('button');
+        playBtn.type = 'button';
+        playBtn.className = 'btn btn-small';
+        playBtn.textContent = '试听';
+        playBtn.addEventListener('click', function () {
+          window.AppAudio.previewVoice(item.key);
+        });
+        var upBtn = document.createElement('button');
+        upBtn.type = 'button';
+        upBtn.className = 'btn btn-small';
+        upBtn.textContent = '替换';
+        var fileInput = document.createElement('input');
+        fileInput.type = 'file';
+        fileInput.accept = 'audio/*,.mp3,.wav,.ogg,.m4a';
+        fileInput.hidden = true;
+        fileInput.addEventListener('change', function () {
+          var file = fileInput.files && fileInput.files[0];
+          if (!file) return;
+          var reader = new FileReader();
+          reader.onload = function () {
+            if (typeof reader.result === 'string') {
+              window.AppAudio.setCustomVoice(item.key, reader.result);
+              renderVoiceList();
+            }
+          };
+          reader.readAsDataURL(file);
+        });
+        upBtn.addEventListener('click', function () { fileInput.click(); });
+        btns.appendChild(playBtn);
+        btns.appendChild(upBtn);
+        if (item.custom) {
+          var rstBtn = document.createElement('button');
+          rstBtn.type = 'button';
+          rstBtn.className = 'btn btn-small';
+          rstBtn.textContent = '恢复';
+          rstBtn.addEventListener('click', function () {
+            window.AppAudio.resetCustomVoice(item.key);
+            renderVoiceList();
+          });
+          btns.appendChild(rstBtn);
+        }
+        row.appendChild(meta);
+        row.appendChild(btns);
+        row.appendChild(fileInput);
+        list.appendChild(row);
+      })(items[i]);
+    }
+  }
+
+  function openVoiceModal() {
+    renderVoiceList();
+    show('voiceModal');
+  }
+
+  if ($('voiceBtn')) $('voiceBtn').addEventListener('click', openVoiceModal);
+  if ($('pauseVoiceBtn')) $('pauseVoiceBtn').addEventListener('click', openVoiceModal);
+  if ($('voiceClose')) $('voiceClose').addEventListener('click', function () { hide('voiceModal'); });
+  if ($('voiceResetAll')) {
+    $('voiceResetAll').addEventListener('click', function () {
+      if (window.AppAudio && window.AppAudio.resetAllCustomVoices) {
+        window.AppAudio.resetAllCustomVoices();
+        renderVoiceList();
+      }
+    });
+  }
   el.skipBtn.addEventListener('click', skipEnding);
   el.introNext.addEventListener('click', advanceIntro);
   el.introSkip.addEventListener('click', function () { finishIntro(false); });

@@ -169,6 +169,65 @@
   background: radial-gradient(ellipse at 50% 108%, rgba(190, 38, 28, .55) 0%, rgba(160, 26, 22, .18) 38%, transparent 68%);
 }
 
+.voice-panel {
+  width: min(580px, 94vw);
+  max-height: 86vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.voice-sub {
+  margin: .3rem 0 .7rem;
+  font-size: .82rem;
+  color: var(--muted, #5c6659);
+  line-height: 1.45;
+}
+
+.voice-list {
+  flex: 1;
+  overflow-y: auto;
+  max-height: 52vh;
+  margin-bottom: .8rem;
+  border: 1px solid #a59871;
+  background: #f5eacf;
+  border-radius: 2px;
+}
+
+.voice-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .5rem;
+  padding: .5rem .65rem;
+  border-bottom: 1px solid #d7caa4;
+  text-align: left;
+}
+
+.voice-row:last-child { border-bottom: 0; }
+.voice-meta { min-width: 0; flex: 1; }
+.voice-name { font-weight: 700; font-size: .9rem; color: var(--ink, #162925); }
+.voice-trig { font-size: .75rem; color: #637264; margin-top: .1rem; }
+.voice-badge {
+  display: inline-block;
+  margin-left: .35rem;
+  padding: .05rem .32rem;
+  font-size: .7rem;
+  border-radius: 2px;
+  background: #aa3f27;
+  color: #fff3d6;
+}
+.voice-btns { display: flex; gap: .32rem; flex-shrink: 0; }
+.voice-btns .btn {
+  min-height: 34px;
+  padding: .28rem .55rem;
+  font-size: .78rem;
+}
+.voice-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: .5rem;
+}
+
 .street-campaign .tip {
   top: 165px;
   padding: .4rem .66rem;

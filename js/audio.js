@@ -45,6 +45,32 @@ window.AppAudio = (function () {
   // 规则：不同语音可同时叠播；同一语音复用单条，不自我叠加；金西瓜串可多条叠加
   var voiceRegistry = {};
   var activeEls = [];
+  var CUSTOM_VOICE_KEY = 'haoge_custom_voices_v1';
+  var customVoices = {};
+  try {
+    customVoices = JSON.parse(localStorage.getItem(CUSTOM_VOICE_KEY) || '{}') || {};
+  } catch (e) { customVoices = {}; }
+
+  var VOICE_META = [
+    { key: 'baoshu', label: '这瓜保熟吗？', trigger: '开局 / 捡保熟卡 / 被抓', file: 'assets/audio/huaqiang-baoshu.mp3', stack: 1 },
+    { key: 'zhaocha', label: '我看你是故意找茬', trigger: '随机挑衅台词', file: 'assets/audio/huaqiang-zhaocha.mp3', stack: 1 },
+    { key: 'haogeZhaocha', label: '你是故意找茬是不是？', trigger: '劈瓜演出郝哥回应', file: 'assets/audio/haoge-zhaocha.mp3', stack: 1 },
+    { key: 'pigua', label: '你劈我瓜是吧？', trigger: '华强劈瓜演出', file: 'assets/audio/huaqiang-pigua.mp3', stack: 1 },
+    { key: 'jinxigua', label: '金西瓜！', trigger: '吃到金西瓜（支持连击）', file: 'assets/audio/huaqiang-jinxigua.mp3', stack: 6 },
+    { key: 'scream', label: '郝哥惨叫', trigger: '无尽模式被抓捅刀瞬间', file: 'assets/audio/haoge-canjiao.mp3', stack: 1 },
+    { key: 'sarilang', label: '萨日朗！', trigger: '撞障 / 路过大妈', file: 'assets/audio/haoge-sarilang.mp3', stack: 1 },
+    { key: 'ending', label: '结尾原声', trigger: '无尽模式结尾骑车离开', file: 'assets/audio/ending-scene.mp3', stack: 1 },
+    { key: 'shengua', label: '生瓜蛋子！', trigger: '随机台词', file: 'assets/audio/haoge-shengguadanzi.mp3', stack: 1 },
+    { key: 'daxiang', label: '大象叫（大招）', trigger: '释放保熟技能', file: 'assets/audio/haoge-daxiang.mp3', stack: 1 },
+    { key: 'aihuaqiang', label: '哎华强！', trigger: '路边一家三口（60%）', file: 'assets/audio/bystander-aihuaqiang.mp3', stack: 1 },
+    { key: 'huaqiang', label: '华强！', trigger: '路边一家三口（30%）', file: 'assets/audio/bystander-huaqiang.mp3', stack: 1 },
+    { key: 'huaihua', label: '华强！哎华强！', trigger: '路边一家三口（10%）', file: 'assets/audio/bystander-huaqiang-aihuaqiang.mp3', stack: 1 },
+  ];
+
+  function saveCustomVoices() {
+    try { localStorage.setItem(CUSTOM_VOICE_KEY, JSON.stringify(customVoices)); } catch (e) { return false; }
+    return true;
+  }
 
   function stopEl(el) {
     try { el.pause(); el.currentTime = 0; } catch (e) {}
@@ -60,15 +86,65 @@ window.AppAudio = (function () {
   }
 
   function registerVoice(name, url, stackCount) {
-    if (window.HAOGE_SOURCE_ONLY) return;
+    if (window.HAOGE_SOURCE_ONLY && !window.HAOGE_ENABLE_VOICES) return;
+    var activeUrl = customVoices[name] || url;
     var els = [];
     var count = stackCount || 1;
     for (var i = 0; i < count; i++) {
       try {
-        els.push(makeVoiceEl(url, name));
+        els.push(makeVoiceEl(activeUrl, name));
       } catch (e) {}
     }
-    voiceRegistry[name] = { els: els, stack: !!stackCount };
+    voiceRegistry[name] = { els: els, stack: !!stackCount, defaultUrl: url };
+  }
+
+  function applyVoiceUrl(name, url) {
+    var v = voiceRegistry[name];
+    if (!v) return;
+    var count = v.els.length || 1;
+    for (var i = 0; i < v.els.length; i++) stopEl(v.els[i]);
+    v.els = [];
+    for (var j = 0; j < count; j++) {
+      try { v.els.push(makeVoiceEl(url, name)); } catch (e) {}
+    }
+  }
+
+  function setCustomVoice(name, dataUrl) {
+    if (!dataUrl) return false;
+    customVoices[name] = dataUrl;
+    var saved = saveCustomVoices();
+    applyVoiceUrl(name, dataUrl);
+    return saved;
+  }
+
+  function resetCustomVoice(name) {
+    delete customVoices[name];
+    saveCustomVoices();
+    var v = voiceRegistry[name];
+    if (v && v.defaultUrl) applyVoiceUrl(name, v.defaultUrl);
+  }
+
+  function resetAllCustomVoices() {
+    customVoices = {};
+    saveCustomVoices();
+    for (var k in voiceRegistry) {
+      if (voiceRegistry[k] && voiceRegistry[k].defaultUrl) {
+        applyVoiceUrl(k, voiceRegistry[k].defaultUrl);
+      }
+    }
+  }
+
+  function listVoices() {
+    var out = [];
+    for (var i = 0; i < VOICE_META.length; i++) {
+      var m = VOICE_META[i];
+      out.push({
+        key: m.key, label: m.label, trigger: m.trigger,
+        custom: !!customVoices[m.key],
+        ready: !!(voiceRegistry[m.key] && voiceRegistry[m.key].els.length),
+      });
+    }
+    return out;
   }
 
   function playVoice(name) {
@@ -159,6 +235,11 @@ window.AppAudio = (function () {
     stop: function () { while (activeEls.length) stopEl(activeEls[0]); },
     playVoice: playVoice,
     playVoiceChain: playVoiceChain,
+    previewVoice: function (name) { ensure(); playVoice(name); },
+    listVoices: listVoices,
+    setCustomVoice: setCustomVoice,
+    resetCustomVoice: resetCustomVoice,
+    resetAllCustomVoices: resetAllCustomVoices,
     jump: function () { tone(320, 0.18, 'square', 0.08, 560); },
     doubleJump: function () { tone(420, 0.18, 'square', 0.08, 700); },
     slide: function () { noise(0.2, 0.12); },

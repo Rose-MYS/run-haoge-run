@@ -6,9 +6,10 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 <title>郝哥快跑 · 这瓜保熟吗？</title>
 <link rel="stylesheet" href="css/style.css">
-<link rel="stylesheet" href="css/street-ui.css?v=3">
+<link rel="stylesheet" href="css/street-ui.css?v=4">
 <script>
   window.HAOGE_SOURCE_ONLY = true;
+  window.HAOGE_ENABLE_VOICES = true;
   window.HAOGE_CAMPAIGN = new URLSearchParams(location.search).get('campaign') !== '0';
   window.HAOGE_PUBLISH_CAST = true;
   if (window.HAOGE_CAMPAIGN) {
@@ -98,6 +99,7 @@
     <div class="menu-sub-actions">
       <button id="eggBtn" class="btn btn-small">彩蛋图鉴</button>
       <button id="helpBtn" class="btn btn-small">玩法说明</button>
+      <button id="voiceBtn" class="btn btn-small">语音包</button>
       <button id="modeSwitchBtn" class="btn btn-small">切换模式</button>
     </div>
     <button id="chapterNewRun" class="btn btn-small" hidden>从第一段开始</button>
@@ -186,7 +188,20 @@
       <button id="resumeBtn" class="btn">继续游戏</button>
       <button id="pauseEggBtn" class="btn">彩蛋图鉴</button>
       <button id="pauseHelpBtn" class="btn">玩法说明</button>
+      <button id="pauseVoiceBtn" class="btn">语音包</button>
       <button id="pauseRestartBtn" class="btn btn-small">重新开始</button>
+    </div>
+  </div>
+</div>
+
+<div id="voiceModal" class="screen hidden">
+  <div class="panel voice-panel">
+    <h2 class="egg-title">语音包管理</h2>
+    <p class="voice-sub">支持试听与上传本地音频（MP3/WAV/OGG/M4A）替换任意台词，保存于本机浏览器。</p>
+    <div id="voiceList" class="voice-list"></div>
+    <div class="voice-actions">
+      <button id="voiceResetAll" class="btn btn-small">全部恢复默认</button>
+      <button id="voiceClose" class="btn btn-small">返回</button>
     </div>
   </div>
 </div>
@@ -202,7 +217,7 @@
 <script src="js/vendor/three.min.js?v=3"></script>
 <script src="js/vendor/GLTFLoader.js?v=3"></script>
 <script src="js/config.js?v=3"></script>
-<script src="js/audio.js?v=4"></script>
+<script src="js/audio.js?v=5"></script>
 <script src="js/characters.js?v=4"></script>
 <script src="js/toon.js?v=3"></script>
 <script>
@@ -214,7 +229,7 @@
   }
 </script>
 <script src="assets/published/cast.js?v=409eea5c-4f100e46"></script>
-<script src="js/models.js?v=6"></script>
+<script src="js/models.js?v=7"></script>
 <script src="js/animations.js?v=3"></script>
 <script src="js/obstacles.js?v=3"></script>
 <script src="js/street-pedestrian.js?v=3"></script>
@@ -227,6 +242,6 @@
 <script src="js/street-cast.js?v=1"></script>
 <script src="js/street-bgm.js?v=1"></script>
 <script src="js/street-feedback.js?v=1"></script>
-<script src="js/game.js?v=7"></script>
+<script src="js/game.js?v=8"></script>
 </body>
 </html>
