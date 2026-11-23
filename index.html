@@ -10,6 +10,7 @@
 <script>
   window.HAOGE_SOURCE_ONLY = true;
   window.HAOGE_CAMPAIGN = new URLSearchParams(location.search).get('campaign') !== '0';
+  window.HAOGE_PUBLISH_CAST = true;
   if (window.HAOGE_CAMPAIGN) {
     document.documentElement.classList.add('street-ui', 'street-campaign');
   }
@@ -201,7 +202,16 @@
 <script src="js/audio.js?v=3"></script>
 <script src="js/characters.js?v=3"></script>
 <script src="js/toon.js?v=3"></script>
-<script src="js/models.js?v=3"></script>
+<script>
+  if (window.HAOGE_CAMPAIGN) {
+    document.getElementById('startBtn').disabled = true;
+    const status = document.getElementById('streetLoadStatus');
+    status.textContent = '正在下载角色模型…';
+    status.hidden = false;
+  }
+</script>
+<script src="assets/published/cast.js?v=5e644415-4f100e46"></script>
+<script src="js/models.js?v=4"></script>
 <script src="js/animations.js?v=3"></script>
 <script src="js/obstacles.js?v=3"></script>
 <script src="js/street-pedestrian.js?v=2"></script>
@@ -212,6 +222,6 @@
 <script src="js/street-route.js?v=4"></script>
 <script src="js/street-campaign.js?v=3"></script>
 <script src="js/street-cast.js?v=1"></script>
-<script src="js/game.js?v=5"></script>
+<script src="js/game.js?v=6"></script>
 </body>
 </html>

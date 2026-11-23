@@ -1,21 +1,23 @@
 window.RunnerModels = (function () {
   'use strict';
 
+  var params = new URLSearchParams(location.search);
+  var campaignMode = window.HAOGE_CAMPAIGN || params.get('campaign') === '1';
+  var publishedCampaign = !!(campaignMode && window.HAOGE_PUBLISH_CAST);
+  var approved = publishedCampaign && window.HAOGE_APPROVED_CAST;
   var DEFAULT_MODEL_URL = 'assets/models/subway_player1.glb';
-  var REFINED_CHASER_URL = 'assets/models/huaqiang-refined.glb';
+  var REFINED_CHASER_URL = approved ? approved.huaqiang : 'assets/models/huaqiang-refined.glb';
   var MODEL_URLS = {
-    haoge: 'assets/models/haoge.glb',
+    haoge: approved ? approved.haoge : 'assets/models/haoge.glb',
     huaqiang: DEFAULT_MODEL_URL,
     xiaodi: DEFAULT_MODEL_URL,
     dama: DEFAULT_MODEL_URL,
   };
   var fromFile = location.protocol === 'file:';
   var modelsEmbedded = MODEL_URLS.haoge.indexOf('data:') === 0;
-  var params = new URLSearchParams(location.search);
-  var campaignMode = window.HAOGE_CAMPAIGN || params.get('campaign') === '1';
   var toonPreview = !campaignMode && params.get('style') === 'toon';
   var refinedChaser = campaignMode || params.get('chaser') === 'refined' || REFINED_CHASER_URL.indexOf('data:') === 0;
-  var proceduralPreview = window.HAOGE_SOURCE_ONLY ||
+  var proceduralPreview = (window.HAOGE_SOURCE_ONLY && !publishedCampaign) ||
     (!campaignMode && (window.HAOGE_PROCEDURAL_CHARACTERS || params.get('models') === 'procedural'));
 
   // —— 开发期郝哥模型切换（临时调试用，定稿后可删除本段 + setHaogePack 相关导出）——
@@ -49,7 +51,7 @@ window.RunnerModels = (function () {
   var loader = new THREE.GLTFLoader();
   var runners = [];
   var haogeFaceTex = null;
-  if (!proceduralPreview && THREE.TextureLoader && (!fromFile || modelsEmbedded)) {
+  if (!publishedCampaign && !proceduralPreview && THREE.TextureLoader && (!fromFile || modelsEmbedded)) {
     new THREE.TextureLoader().load('assets/textures/haoge-face.png?v=3', function (t) {
       haogeFaceTex = t;
       t.anisotropy = 4;
@@ -1129,7 +1131,10 @@ window.RunnerModels = (function () {
 
   return {
     loadRunner: loadRunner,
-    usesGltf: function () { return !proceduralPreview && (!fromFile || modelsEmbedded); },
+    usesGltf: function () {
+      if (publishedCampaign) return modelsEmbedded && REFINED_CHASER_URL.indexOf('data:') === 0;
+      return !proceduralPreview && (!fromFile || modelsEmbedded);
+    },
     setFace: setFace,
     setBloodyHands: setBloodyHands,
     setBloodyKnife: setBloodyKnife,

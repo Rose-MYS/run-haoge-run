@@ -6,7 +6,7 @@
 
 - [GitHub Pages 在线试玩](https://rose-mys.github.io/run-haoge-run/)
 - 离线游玩请下载或克隆仓库，双击 `index.html` 或 Windows 下的 `打开游戏.bat`。
-- 每段至少三分钟，通过一段后自动记录下一段。固定 HUD 显示本段目标、已跑时间、出口距离和转向。公开版使用程序化角色和合成音效，Three.js 随源码提供。
+- 每段至少三分钟，通过一段后自动记录下一段。固定 HUD 显示本段目标、已跑时间、出口距离和转向。分段版加载与离线成品相同的郝哥和刘华强游戏模型。首次打开需要下载角色模型，两人加载完成后即可开跑。
 
 | 操作 | 键盘 | 触屏 |
 | --- | --- | --- |
@@ -26,4 +26,4 @@
 
 各段长度、弯道和障碍配置位于 `js/street-campaign.js`，街景位于 `js/street-art.js`，主循环和玩法逻辑位于 `js/game.js`。GitHub Pages 从 `main` 分支根目录发布。
 
-本仓库提供可玩的源码快照。本地项目中的脸部贴图、GLB 模型、录音、参考素材和安装包由作者在本机管理。Three.js 的第三方许可见 [MIT 许可](js/vendor/THREE-LICENSE.txt)。
+公开版随游戏提供两份现役模型的运行数据及合成音效。独立脸部贴图、录音、参考素材和完整离线成品由作者在本机管理。Three.js 的第三方许可见 [MIT 许可](js/vendor/THREE-LICENSE.txt)。

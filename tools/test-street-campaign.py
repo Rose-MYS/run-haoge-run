@@ -19,7 +19,9 @@ CHECK_CAST = """(() => {
       for (const name of ['createHaoGe', 'createHuaQiang']) {
         const create = runners[name];
         runners[name] = (...args) => {
-          if (!window.HAOGE_SOURCE_ONLY) throw new Error('campaign created an old lead model');
+          if (!window.HAOGE_SOURCE_ONLY || window.HAOGE_PUBLISH_CAST) {
+            throw new Error('campaign created an old lead model');
+          }
           return create(...args);
         };
       }
@@ -43,7 +45,7 @@ def load(page, file):
     if page.locator("#introSkip").is_visible():
         page.locator("#introSkip").click()
     page.wait_for_function(
-        """__gameDebug.haoGe.visible && __gameDebug.huaQiang.visible && (window.HAOGE_SOURCE_ONLY
+        """__gameDebug.haoGe.visible && __gameDebug.huaQiang.visible && (window.HAOGE_SOURCE_ONLY && !window.HAOGE_PUBLISH_CAST
             ? !RunnerModels.usesGltf() && !__gameDebug.haoGe.userData.isGLB && !__gameDebug.huaQiang.userData.isGLB
             : __gameDebug.haoGe.userData.isPureGLB && __gameDebug.huaQiang.userData.refinedChaser)""",
         polling=100,

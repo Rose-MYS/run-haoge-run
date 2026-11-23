@@ -1042,7 +1042,8 @@
 
   var player = new THREE.Group();
   var playerBody = new THREE.Group();
-  var cast = campaign && !window.HAOGE_SOURCE_ONLY ? window.StreetCast.create() : null;
+  var cast = campaign && (!window.HAOGE_SOURCE_ONLY || window.HAOGE_PUBLISH_CAST)
+    ? window.StreetCast.create() : null;
   var haoGe = cast ? cast.haoge : window.Runners.createHaoGe();
   haoGe.rotation.y = Math.PI; // 脸朝奔跑方向
   playerBody.add(haoGe);
@@ -1124,10 +1125,16 @@
     var status = document.getElementById('streetLoadStatus');
     if (cast && !wait) {
       streetModelBlocked = true;
+      streetModelRetry = !!window.HAOGE_PUBLISH_CAST;
       haoGe.visible = huaQiang.visible = haogeTag.visible = huaqiangTag.visible = false;
-      el.startBtn.disabled = true;
+      el.startBtn.disabled = !streetModelRetry;
       status.hidden = false;
-      status.textContent = '请从分段逃脱离线成品或本地开发入口开始';
+      if (streetModelRetry) {
+        el.startBtn.textContent = '重新加载';
+        status.textContent = '角色模型未下载成功，请重新加载';
+      } else {
+        status.textContent = '请从分段逃脱离线成品或本地开发入口开始';
+      }
       return;
     }
     if (wait) {
