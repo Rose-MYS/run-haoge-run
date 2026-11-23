@@ -1,4 +1,4 @@
-"""Transfer the game's Meshy7 rig to the subdivided, approved Huaqiang mesh."""
+"""Bind a reviewed, subdivided role mesh to the game's Meshy7 skeleton."""
 
 import argparse
 from copy import deepcopy
@@ -33,7 +33,7 @@ def array(glb, index):
     )
 
 
-def transfer_weights(source, donor, head_index, joint_count):
+def transfer_weights(source, donor, head_index, joint_count, neck_start):
     source_prim = source[0]["meshes"][0]["primitives"][0]
     donor_attrs = donor[0]["meshes"][0]["primitives"][0]["attributes"]
     triangles = array(source, source_prim["indices"]).reshape(-1, 4, 3)
@@ -76,7 +76,7 @@ def transfer_weights(source, donor, head_index, joint_count):
     welded = np.zeros((len(totals), joint_count), dtype=np.float32)
     np.add.at(welded, groups, weights)
     weights = welded[groups] / totals[groups, None]
-    rigid = np.clip((points[:, 1] - 1.512) / .061, 0, 1)
+    rigid = np.clip((points[:, 1] - neck_start) / .061, 0, 1)
     rigid = rigid * rigid * (3 - 2 * rigid)
     weights *= 1 - rigid[:, None]
     weights[:, head_index] += rigid
@@ -86,7 +86,7 @@ def transfer_weights(source, donor, head_index, joint_count):
     return points, joints.astype("u1"), values.astype("<f4")
 
 
-def make_rig(source, donor, output):
+def make_rig(source, donor, output, character="huaqiang"):
     doc = deepcopy(source[0])
     raw = bytearray(source[1][:doc["buffers"][0]["byteLength"]])
     rig = donor[0]
@@ -94,7 +94,10 @@ def make_rig(source, donor, output):
     doc["scenes"] = deepcopy(rig["scenes"])
     doc["skins"] = deepcopy(rig["skins"])
     names = [doc["nodes"][index]["name"] for index in doc["skins"][0]["joints"]]
-    points, joints, weights = transfer_weights(source, donor, names.index("Head"), len(names))
+    haoge = character == "haoge"
+    points, joints, weights = transfer_weights(
+        source, donor, names.index("Head"), len(names), 1.45 if haoge else 1.512
+    )
 
     def append(data, target=None):
         raw.extend(b"\0" * (-len(raw) % 4))
@@ -124,20 +127,21 @@ def make_rig(source, donor, output):
             node["translation"] = [axis * unit for axis in node["translation"]]
     attributes["JOINTS_0"] = add_attribute(joints, 5121, "VEC4")
     attributes["WEIGHTS_0"] = add_attribute(weights, 5126, "VEC4")
-    doc["nodes"][next(i for i, node in enumerate(doc["nodes"]) if "mesh" in node)]["name"] = "Huaqiang"
+    mesh_node = next(node for node in doc["nodes"] if "mesh" in node)
+    mesh_node["name"] = "HaogeReviewed" if haoge else "Huaqiang"
 
-    # The existing ending asks for a smirk. Keep the approved neutral shape at
-    # weight zero and lift one corner of the mouth only for that animation.
-    x, y, z = points.T
-    lift = np.exp(-((x - .017) / .022) ** 2 - ((y - 1.621) / .019) ** 2)
-    lift *= np.clip((z - .047) / .033, 0, 1)
-    smirk = np.zeros_like(points)
-    smirk[:, 0] = lift * .002
-    smirk[:, 1] = lift * .0048
-    target = add_attribute(smirk, 5126, "VEC3", min=smirk.min(0).tolist(), max=smirk.max(0).tolist())
-    doc["meshes"][0]["primitives"][0]["targets"] = [{"POSITION": target}]
-    doc["meshes"][0]["weights"] = [0]
-    doc["meshes"][0].setdefault("extras", {})["targetNames"] = ["smirk"]
+    if not haoge:
+        # Lift one corner only for the existing ending's smirk animation.
+        x, y, z = points.T
+        lift = np.exp(-((x - .017) / .022) ** 2 - ((y - 1.621) / .019) ** 2)
+        lift *= np.clip((z - .047) / .033, 0, 1)
+        smirk = np.zeros_like(points)
+        smirk[:, 0] = lift * .002
+        smirk[:, 1] = lift * .0048
+        target = add_attribute(smirk, 5126, "VEC3", min=smirk.min(0).tolist(), max=smirk.max(0).tolist())
+        doc["meshes"][0]["primitives"][0]["targets"] = [{"POSITION": target}]
+        doc["meshes"][0]["weights"] = [0]
+        doc["meshes"][0].setdefault("extras", {})["targetNames"] = ["smirk"]
 
     def copy_accessor(index, converted=None):
         accessor = deepcopy(rig["accessors"][index])
@@ -163,21 +167,24 @@ def make_rig(source, donor, output):
     # from centimetres to metres, including the inverse translation.
     inverses.reshape(-1, 4, 4)[..., :3] *= unit
     skin["inverseBindMatrices"] = copy_accessor(inverse_index, inverses)
-    run = deepcopy(next(clip for clip in rig["animations"] if clip["name"] == "run"))
-    moving = {channel["sampler"] for channel in run["channels"]
-              if channel["target"]["path"] == "translation"}
+    clips = deepcopy(rig["animations"] if haoge else [next(
+        clip for clip in rig["animations"] if clip["name"] == "run"
+    )])
     accessors = {}
-    for sampler_id, sampler in enumerate(run["samplers"]):
-        for key in ("input", "output"):
-            index = sampler[key]
-            convert = key == "output" and sampler_id in moving
-            lookup = (index, convert)
-            if lookup not in accessors:
-                values = array(donor, index) * np.float32(unit) if convert else None
-                accessors[lookup] = copy_accessor(index, values)
-            sampler[key] = accessors[lookup]
-    doc["animations"] = [run]
-    doc["scenes"][0]["name"] = "HuaqiangRig"
+    for clip in clips:
+        moving = {channel["sampler"] for channel in clip["channels"]
+                  if channel["target"]["path"] == "translation"}
+        for sampler_id, sampler in enumerate(clip["samplers"]):
+            for key in ("input", "output"):
+                index = sampler[key]
+                convert = key == "output" and sampler_id in moving
+                lookup = (index, convert)
+                if lookup not in accessors:
+                    values = array(donor, index) * np.float32(unit) if convert else None
+                    accessors[lookup] = copy_accessor(index, values)
+                sampler[key] = accessors[lookup]
+    doc["animations"] = clips
+    doc["scenes"][0]["name"] = "HaogeRig" if haoge else "HuaqiangRig"
     raw.extend(b"\0" * (-len(raw) % 4))
     doc["buffers"][0]["byteLength"] = len(raw)
     header = json.dumps(doc, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
@@ -194,9 +201,10 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("approved", type=Path)
     parser.add_argument("output", type=Path)
+    parser.add_argument("--character", choices=("haoge", "huaqiang"), default="huaqiang")
     args = parser.parse_args()
     donor = ROOT / "assets/models/haoge-meshy7-fixed.glb"
-    make_rig(load_glb(args.approved), load_glb(donor), args.output)
+    make_rig(load_glb(args.approved), load_glb(donor), args.output, args.character)
 
 
 if __name__ == "__main__":

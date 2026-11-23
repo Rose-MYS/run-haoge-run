@@ -5,10 +5,11 @@ window.RunnerModels = (function () {
   var campaignMode = window.HAOGE_CAMPAIGN || params.get('campaign') === '1';
   var publishedCampaign = !!(campaignMode && window.HAOGE_PUBLISH_CAST);
   var approved = publishedCampaign && window.HAOGE_APPROVED_CAST;
+  var REVIEWED_HAOGE_URL = 'assets/models/haoge-reviewed.glb';
   var DEFAULT_MODEL_URL = 'assets/models/subway_player1.glb';
   var REFINED_CHASER_URL = approved ? approved.huaqiang : 'assets/models/huaqiang-refined.glb';
   var MODEL_URLS = {
-    haoge: approved ? approved.haoge : 'assets/models/haoge.glb',
+    haoge: approved ? approved.haoge : (campaignMode ? REVIEWED_HAOGE_URL : 'assets/models/haoge.glb'),
     huaqiang: DEFAULT_MODEL_URL,
     xiaodi: DEFAULT_MODEL_URL,
     dama: DEFAULT_MODEL_URL,
@@ -51,7 +52,7 @@ window.RunnerModels = (function () {
   var loader = new THREE.GLTFLoader();
   var runners = [];
   var haogeFaceTex = null;
-  if (!publishedCampaign && !proceduralPreview && THREE.TextureLoader && (!fromFile || modelsEmbedded)) {
+  if (!campaignMode && !proceduralPreview && THREE.TextureLoader && (!fromFile || modelsEmbedded)) {
     new THREE.TextureLoader().load('assets/textures/haoge-face.png?v=3', function (t) {
       haogeFaceTex = t;
       t.anisotropy = 4;
@@ -966,8 +967,9 @@ window.RunnerModels = (function () {
         return;
       }
       loader.load(url, function (gltf) {
+        var reviewedMesh = strict && kind === 'haoge' && gltf.scene.getObjectByName('HaogeReviewed');
         if (strict && kind === 'haoge' &&
-          (!gltf.scene.getObjectByProperty('isSkinnedMesh', true) ||
+          (!reviewedMesh || !reviewedMesh.isSkinnedMesh ||
             !gltf.animations.some(function (clip) { return normKey(clip.name) === 'run'; }))) {
           next();
           return;

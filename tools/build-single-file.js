@@ -53,14 +53,19 @@ html = html.replace(/<script src="([^"]+)"><\/script>/g, (m, src) => {
     });
   }
   if (!sourceOnly && !procedural && file === 'js/models.js') {
-    js = js.replace(/'(assets\/models\/(?:haoge|subway_player1)\.glb)'/g, (match, asset) =>
-      "'" + dataUrl(asset, 'model/gltf-binary') + "'");
+    if (campaign) {
+      js = js.replace(/'(assets\/models\/haoge-reviewed\.glb)'/, (match, asset) =>
+        "'" + dataUrl(asset, 'model/gltf-binary') + "'");
+    } else {
+      js = js.replace(/'(assets\/models\/(?:haoge|subway_player1)\.glb)'/g, (match, asset) =>
+        "'" + dataUrl(asset, 'model/gltf-binary') + "'");
+      js = js.replace(/'(assets\/textures\/haoge-face\.png)\?v=\d+'/g, (match, asset) =>
+        "'" + dataUrl(asset, 'image/png') + "'");
+    }
     if (refinedChaser) {
       js = js.replace(/'(assets\/models\/huaqiang-refined\.glb)'/, (match, asset) =>
         "'" + dataUrl(asset, 'model/gltf-binary') + "'");
     }
-    js = js.replace(/'(assets\/textures\/haoge-face\.png)\?v=\d+'/g, (match, asset) =>
-      "'" + dataUrl(asset, 'image/png') + "'");
   }
   return '<script>\n' + js + '\n</script>';
 });

@@ -47,7 +47,8 @@ def load(page, file):
     page.wait_for_function(
         """__gameDebug.haoGe.visible && __gameDebug.huaQiang.visible && (window.HAOGE_SOURCE_ONLY && !window.HAOGE_PUBLISH_CAST
             ? !RunnerModels.usesGltf() && !__gameDebug.haoGe.userData.isGLB && !__gameDebug.huaQiang.userData.isGLB
-            : __gameDebug.haoGe.userData.isPureGLB && __gameDebug.huaQiang.userData.refinedChaser)""",
+            : __gameDebug.haoGe.userData.isPureGLB && __gameDebug.huaQiang.userData.refinedChaser &&
+              __gameDebug.haoGe.getObjectByName('HaogeReviewed')?.isSkinnedMesh)""",
         polling=100,
     )
     page.evaluate("""() => {
