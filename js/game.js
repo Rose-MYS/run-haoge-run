@@ -177,6 +177,10 @@
     familyGroups.push(fg);
     respawnFamily(fg);
   }
+  // 退场演出专用路边一家三口（爸爸挥手张嘴喊 + 妈妈 + 女儿）
+  var endingFamily = buildFamilyGroup();
+  endingFamily.visible = false;
+  scene.add(endingFamily);
 
   /* ---------------- 角色 ---------------- */
   function makeNameTag(text, bg, fg) {
@@ -2853,10 +2857,27 @@
   function gameOver() {
     if (campaign) {
       if (S.campaignCatchT > 0) return;
-      S.campaignCatchT = 1.15;
-      S.shake = 0.65;
-      S.flash = 0.75;
+      cleanupPigua();
+      S.campaignCatchMax = 6.2;
+      S.campaignCatchT = S.campaignCatchMax;
+      S.campaignCatchBlood = false;
+      S.campaignCatchScream = false;
+      S.campaignCatchSarilang = false;
+      S.campaignCatchFamily = false;
+      S.campaignCatchEnding = false;
+      S.deathFromX = chaser.position.x;
+      S.deathFromZ = Math.min(chaser.position.z, player.position.z + 3.2);
+      S.shake = 0.45;
+      S.flash = 0.55;
       P.mode = 'caught';
+      playerBody.visible = true;
+      chaser.visible = true;
+      xiaoDi.visible = false;
+      scooter.visible = false;
+      endingFamily.visible = false;
+      resetFamilyPose(endingFamily);
+      hide('skipBtn');
+      hide('skipHint');
       window.AppAudio.caught();
       window.AppAudio.playVoice('baoshu');
       showBubble('华强：这瓜保熟吗？！', true);
@@ -3214,6 +3235,29 @@
     if (S.mode !== 'playing') return;
     S.mode = 'chapter';
     S.campaignCatchT = 0;
+    hide('skipBtn');
+    hide('skipHint');
+    xiaoDi.visible = false;
+    scooter.visible = false;
+    endingFamily.visible = false;
+    resetFamilyPose(endingFamily);
+    bloodRing.visible = false;
+    bloodRingT = 0;
+    bloodFountainT = 0;
+    dripPoints.visible = false;
+    piguaSlashArc.visible = false;
+    piguaHitSpark.visible = false;
+    piguaSparkT = 0;
+    haoGe.rotation.set(0, Math.PI, 0);
+    haoGe.position.y = 0;
+    huaQiang.rotation.set(0, Math.PI, 0);
+    huaQiang.position.y = 0;
+    if (haoGe.userData && haoGe.userData.clearRigPose) haoGe.userData.clearRigPose();
+    if (huaQiang.userData && huaQiang.userData.clearRigPose) huaQiang.userData.clearRigPose();
+    if (window.Runners) {
+      window.Runners.setBloodyHands(haoGe, false);
+      window.Runners.setBloodyKnife(huaQiang, false);
+    }
     var chapterDist = Math.max(0, S.dist - campaign.stage().from);
     var isLastStage = campaign.stage() === campaign.stages[campaign.stages.length - 1];
     cleanupPigua();
@@ -3264,41 +3308,242 @@
     if (S.turnBoostT > 0) S.turnBoostT = Math.max(0, S.turnBoostT - dt);
     if (S.perfectVoiceCd > 0) S.perfectVoiceCd = Math.max(0, S.perfectVoiceCd - dt);
     if (S.campaignCatchT > 0) {
-      S.campaignCatchT -= dt;
-      var cp = Math.min(1, 1 - S.campaignCatchT / 1.15);
-      var cuCatch = huaQiang.userData;
-      chaser.position.x += (player.position.x - chaser.position.x) * Math.min(1, dt * 10);
-      chaser.position.z += ((player.position.z + 1.05) - chaser.position.z) * Math.min(1, dt * 10);
-      huaQiang.rotation.y = Math.PI;
-      huaQiang.rotation.x = 0;
-      if (cuCatch) {
-        if (window.RunnerAnim) window.RunnerAnim.freeze(huaQiang);
-        if (cuCatch.clearRigPose) cuCatch.clearRigPose();
-        if (cp < 0.38) {
-          var cw = easeOut(cp / 0.38);
-          if (cuCatch.spine) { cuCatch.spine.rotation.y = -0.22 * cw; cuCatch.spine.rotation.x = -0.04 * cw; }
-          if (cuCatch.rightArm) cuCatch.rightArm.rotation.x = -1.85 * cw;
-          if (cuCatch.rightForeArm) cuCatch.rightForeArm.rotation.x = -0.95 * cw;
-          if (cuCatch.leftArm) cuCatch.leftArm.rotation.x = -0.40 * cw;
-          if (cuCatch.leftForeArm) cuCatch.leftForeArm.rotation.x = -0.65 * cw;
-          if (cuCatch.leftLeg) cuCatch.leftLeg.rotation.x = -0.32 * cw;
-          if (cuCatch.leftKnee) cuCatch.leftKnee.rotation.x = 0.38 * cw;
-          if (cuCatch.rightLeg) cuCatch.rightLeg.rotation.x = 0.28 * cw;
-          if (cuCatch.rightKnee) cuCatch.rightKnee.rotation.x = 0.20 * cw;
-        } else {
-          var cs = easeIn(Math.min(1, (cp - 0.38) / 0.32));
-          if (cuCatch.spine) { cuCatch.spine.rotation.y = -0.22 + 0.48 * cs; cuCatch.spine.rotation.x = -0.04 + 0.26 * cs; }
-          if (cuCatch.chest) cuCatch.chest.rotation.x = 0.12 * cs;
-          if (cuCatch.rightArm) cuCatch.rightArm.rotation.x = -1.85 + 1.05 * cs;
-          if (cuCatch.rightForeArm) cuCatch.rightForeArm.rotation.x = -0.95 + 0.70 * cs;
-          if (cuCatch.leftArm) cuCatch.leftArm.rotation.x = -0.40 + 0.65 * cs;
-          if (cuCatch.leftForeArm) cuCatch.leftForeArm.rotation.x = -0.75;
-          if (cuCatch.leftLeg) cuCatch.leftLeg.rotation.x = -0.32 - 0.14 * cs;
-          if (cuCatch.leftKnee) cuCatch.leftKnee.rotation.x = 0.38 + 0.20 * cs;
-          if (cuCatch.rightLeg) cuCatch.rightLeg.rotation.x = 0.28 + 0.10 * cs;
-          if (cuCatch.rightKnee) cuCatch.rightKnee.rotation.x = 0.20;
+      S.campaignCatchT = Math.max(0, S.campaignCatchT - dt);
+      var catchDur = S.campaignCatchMax || 4.9;
+      var T = Math.min(catchDur, catchDur - S.campaignCatchT);
+      var ua = huaQiang.userData;
+      var up = haoGe.userData;
+      var rushEnd = 0.34;
+      if (window.RunnerAnim) {
+        window.RunnerAnim.freeze(haoGe);
+        if (T >= rushEnd) window.RunnerAnim.freeze(huaQiang);
+      }
+      if (ua && ua.clearRigPose) ua.clearRigPose();
+      if (up && up.clearRigPose) up.clearRigPose();
+
+      // 3.0s 后显示跳过按钮，玩家可点击或按 Enter/空格 跳过直接进入结算
+      if (T >= 3.0) {
+        show('skipBtn');
+        show('skipHint');
+      }
+
+      // ---- 华强动作：冲刺贴近 → 蓄力挥刀斜劈 → 收刀站定 → 跨上电动车扬长而去 ----
+      if (T < rushEnd) {
+        var rp = easeOut(Math.min(1, T / rushEnd));
+        chaser.position.x = S.deathFromX + (player.position.x - S.deathFromX) * rp;
+        chaser.position.z = S.deathFromZ + ((player.position.z + 1.02) - S.deathFromZ) * rp;
+        huaQiang.rotation.set(0, Math.PI, 0);
+        huaQiang.position.y = 0;
+        if (ua && ua.isGLB && window.RunnerAnim) {
+          window.RunnerAnim.play(huaQiang, 'run', { timeScale: 1.55 });
+          if (ua.spine) ua.spine.rotation.x = 0.10;
+          if (ua.rightForeArm) ua.rightForeArm.rotation.x = -0.65;
+        }
+      } else if (T < 0.72) {
+        var lp = (T - rushEnd) / (0.72 - rushEnd);
+        chaser.position.x = player.position.x;
+        chaser.position.z = player.position.z + 1.02 - 0.45 * easeIn(lp);
+        huaQiang.rotation.set(0, Math.PI, 0);
+        huaQiang.position.y = 0;
+        if (ua) {
+          if (lp < 0.34) {
+            var cw = easeOut(lp / 0.34);
+            if (ua.spine) { ua.spine.rotation.y = -0.24 * cw; ua.spine.rotation.x = -0.05 * cw; }
+            if (ua.rightArm) { ua.rightArm.rotation.x = -2.05 * cw; ua.rightArm.rotation.z = 0.55; }
+            if (ua.rightForeArm) ua.rightForeArm.rotation.x = -0.95 * cw;
+            if (ua.leftArm) { ua.leftArm.rotation.x = -0.40 * cw; ua.leftArm.rotation.z = -0.65; }
+            if (ua.leftForeArm) ua.leftForeArm.rotation.x = -0.65 * cw;
+            if (ua.leftLeg) ua.leftLeg.rotation.x = -0.32 * cw;
+            if (ua.leftKnee) ua.leftKnee.rotation.x = 0.38 * cw;
+            if (ua.rightLeg) ua.rightLeg.rotation.x = 0.28 * cw;
+            if (ua.rightKnee) ua.rightKnee.rotation.x = 0.20 * cw;
+            piguaSlashArc.visible = false;
+          } else {
+            var cs = easeIn(Math.min(1, (lp - 0.34) / 0.66));
+            if (ua.spine) { ua.spine.rotation.y = -0.24 + 0.52 * cs; ua.spine.rotation.x = -0.05 + 0.28 * cs; }
+            if (ua.chest) ua.chest.rotation.x = 0.14 * cs;
+            if (ua.rightArm) { ua.rightArm.rotation.x = -2.05 + 1.35 * cs; ua.rightArm.rotation.z = 0.62; }
+            if (ua.rightForeArm) ua.rightForeArm.rotation.x = -0.95 + 0.72 * cs;
+            if (ua.leftArm) { ua.leftArm.rotation.x = -0.40 + 0.55 * cs; ua.leftArm.rotation.z = -0.72; }
+            if (ua.leftForeArm) ua.leftForeArm.rotation.x = -0.75;
+            if (ua.leftLeg) ua.leftLeg.rotation.x = -0.32 - 0.14 * cs;
+            if (ua.leftKnee) ua.leftKnee.rotation.x = 0.38 + 0.20 * cs;
+            if (ua.rightLeg) ua.rightLeg.rotation.x = 0.28 + 0.10 * cs;
+            if (ua.rightKnee) ua.rightKnee.rotation.x = 0.20;
+            // 凌厉斜劈刀光
+            piguaSlashArc.visible = true;
+            piguaSlashArc.position.set(player.position.x + 0.08, 1.35 - cs * 0.42, player.position.z + 0.22);
+            piguaSlashArc.rotation.set(0.22, 0.25, 0.75 - cs * 1.9);
+            piguaSlashArc.scale.setScalar(1.05);
+            var sa = Math.sin(cs * Math.PI);
+            piguaSlashMat.opacity = sa * 0.88;
+            piguaSlashCoreMat.opacity = sa * 0.96;
+          }
+        }
+      } else if (T < 1.50) {
+        piguaSlashArc.visible = false;
+        huaQiang.rotation.set(0, Math.PI, 0);
+        huaQiang.position.y = 0;
+        if (ua) {
+          if (ua.spine) ua.spine.rotation.x = 0.05;
+          if (ua.leftArm) { ua.leftArm.rotation.x = 0.05; ua.leftArm.rotation.z = -0.72; }
+          if (ua.leftForeArm) ua.leftForeArm.rotation.x = -0.25;
+          if (ua.rightArm) { ua.rightArm.rotation.x = -0.22; ua.rightArm.rotation.z = 0.68; }
+          if (ua.rightForeArm) ua.rightForeArm.rotation.x = -0.52;
+        }
+      } else if (T < 2.15) {
+        // 走向停在右侧的黑色踏板电动车并自然跨上车座
+        piguaSlashArc.visible = false;
+        var pm = Math.min(1, (T - 1.50) / 0.65);
+        scooter.visible = true;
+        scooter.rotation.set(0, 0, 0);
+        scooter.position.set(player.position.x + 1.50, 0, player.position.z + 1.45);
+        chaser.position.x = player.position.x + 1.50 * easeOut(pm);
+        chaser.position.z = player.position.z + 0.57 + (1.28 - 0.57) * easeOut(pm);
+        huaQiang.rotation.y = Math.PI * (1 - easeOut(pm));
+        huaQiang.rotation.x = 0;
+        huaQiang.position.y = -0.22 * easeIn(pm);
+        if (ua) {
+          if (ua.leftLeg) ua.leftLeg.rotation.x = 0.55 * pm;
+          if (ua.leftKnee) ua.leftKnee.rotation.x = 0.75 * easeIn(pm);
+          if (ua.rightLeg) ua.rightLeg.rotation.x = 0.55 * pm;
+          if (ua.rightKnee) ua.rightKnee.rotation.x = 0.75 * easeIn(pm);
+          if (ua.leftArm) { ua.leftArm.rotation.x = -0.82 * pm; ua.leftArm.rotation.y = 0.24 * pm; ua.leftArm.rotation.z = 0.52 * pm; }
+          if (ua.leftForeArm) ua.leftForeArm.rotation.x = -0.35 * pm;
+          if (ua.rightArm) { ua.rightArm.rotation.x = -0.82 * pm; ua.rightArm.rotation.y = -0.36 * pm; ua.rightArm.rotation.z = -0.78 * pm; }
+          if (ua.rightForeArm) ua.rightForeArm.rotation.x = -0.45 * pm;
+        }
+      } else {
+        // 骑着电动车沿路加速驶离，从路边一家三口身旁掠过驶出画面（双手稳握车把）
+        var pr2 = Math.min(1, (T - 2.15) / Math.max(0.1, catchDur - 2.15));
+        var ez = easeIn(pr2);
+        scooter.visible = true;
+        var fx = Math.min(3.55, Math.max(2.65, player.position.x + 2.85));
+        var fz = player.position.z + 4.2;
+        var scX = (player.position.x + 1.50) + (fx - 1.35 - (player.position.x + 1.50)) * Math.min(1, pr2 * 1.45) + ez * 1.4;
+        var scZ = (player.position.z + 1.45) + ez * 9.8;
+        scooter.position.set(scX, 0, scZ);
+        scooter.rotation.y = 0.14 + ez * 0.22;
+        var wheels = scooter.userData && scooter.userData.wheels;
+        if (wheels) {
+          for (var wi = 0; wi < wheels.length; wi++) wheels[wi].rotation.x += dt * 20;
+        }
+        chaser.position.set(scooter.position.x - Math.sin(scooter.rotation.y) * 0.16, 0, scooter.position.z - Math.cos(scooter.rotation.y) * 0.16);
+        huaQiang.rotation.set(0.12, scooter.rotation.y, 0);
+        huaQiang.position.y = -0.22;
+        if (ua) {
+          if (ua.spine) ua.spine.rotation.x = 0.16;
+          if (ua.leftLeg) ua.leftLeg.rotation.x = 0.72;
+          if (ua.leftKnee) ua.leftKnee.rotation.x = 0.95;
+          if (ua.rightLeg) ua.rightLeg.rotation.x = 0.72;
+          if (ua.rightKnee) ua.rightKnee.rotation.x = 0.95;
+          if (ua.leftArm) { ua.leftArm.rotation.x = -0.96; ua.leftArm.rotation.y = 0.26; ua.leftArm.rotation.z = 0.54; }
+          if (ua.leftForeArm) ua.leftForeArm.rotation.x = -0.38;
+          if (ua.rightArm) { ua.rightArm.rotation.x = -0.35; ua.rightArm.rotation.y = -0.95; ua.rightArm.rotation.z = -0.35; }
+          if (ua.rightForeArm) ua.rightForeArm.rotation.x = -0.45;
+        }
+        // 路边一家三口出现并挥手张嘴呼喊「哎华强！」
+        if (T >= 2.35) {
+          endingFamily.visible = true;
+          endingFamily.scale.setScalar(1.08);
+          endingFamily.position.set(fx, 0, fz);
+          endingFamily.rotation.y = -0.35;
+          if (T >= 2.75) {
+            if (!S.campaignCatchFamily) {
+              S.campaignCatchFamily = true;
+              window.AppAudio.playVoice('aihuaqiang');
+              showBubble('哎华强！', true);
+            }
+            var ef = endingFamily.userData && endingFamily.userData.father;
+            if (ef && ef.userData) {
+              if (ef.userData.rightArm) {
+                ef.userData.rightArm.rotation.z = -1.25 + Math.sin(S.time * 18) * 0.22;
+                ef.userData.rightArm.rotation.x = -0.45;
+              }
+              if (ef.userData.head) ef.userData.head.rotation.y = 0.42;
+              if (ef.userData.mouthClosed) ef.userData.mouthClosed.visible = false;
+              if (ef.userData.mouthOpen) ef.userData.mouthOpen.visible = true;
+            }
+          }
         }
       }
+
+      // ---- 郝哥动作：中刀转身面朝镜头、双手紧捂胸腹踉跄 → 单膝跪地痛苦捂腹 ----
+      if (T >= 0.45 && T < 1.55) {
+        var ft = Math.min(1, (T - 0.45) / 0.55);
+        haoGe.rotation.y = Math.PI * (1 - Math.min(1, ft * 1.25));
+        haoGe.rotation.x = 0.12 * easeIn(ft);
+        haoGe.position.y = 0;
+        if (up) {
+          if (up.spine) up.spine.rotation.x = 0.24 * ft;
+          if (up.leftArm) { up.leftArm.rotation.x = -0.82 * ft; up.leftArm.rotation.z = -0.88; }
+          if (up.leftForeArm) up.leftForeArm.rotation.x = -1.15 * ft;
+          if (up.rightArm) { up.rightArm.rotation.x = -0.82 * ft; up.rightArm.rotation.z = 0.88; }
+          if (up.rightForeArm) up.rightForeArm.rotation.x = -1.15 * ft;
+          if (up.leftLeg) up.leftLeg.rotation.x = -0.18 * ft;
+          if (up.leftKnee) up.leftKnee.rotation.x = 0.25 * ft;
+          if (up.rightLeg) up.rightLeg.rotation.x = 0.14 * ft;
+          if (up.head) up.head.rotation.x = 0.22 * ft;
+        }
+      } else if (T >= 1.55) {
+        var kt = easeOut(Math.min(1, (T - 1.55) / 0.65));
+        haoGe.rotation.y = 0;
+        haoGe.rotation.x = 0.12 + 0.14 * kt;
+        haoGe.position.y = -0.42 * kt;
+        if (up) {
+          if (up.spine) up.spine.rotation.x = 0.24 + 0.16 * kt;
+          if (up.leftArm) { up.leftArm.rotation.x = -0.92; up.leftArm.rotation.z = -0.92; }
+          if (up.leftForeArm) up.leftForeArm.rotation.x = -1.25;
+          if (up.rightArm) { up.rightArm.rotation.x = -0.92; up.rightArm.rotation.z = 0.92; }
+          if (up.rightForeArm) up.rightForeArm.rotation.x = -1.25;
+          if (up.leftLeg) up.leftLeg.rotation.x = -0.18 - 0.85 * kt;
+          if (up.leftKnee) up.leftKnee.rotation.x = 0.25 + 1.25 * kt;
+          if (up.rightLeg) up.rightLeg.rotation.x = 0.14 + 0.45 * kt;
+          if (up.rightKnee) up.rightKnee.rotation.x = 1.20 * kt;
+          if (up.head) up.head.rotation.x = 0.22 + 0.14 * kt;
+        }
+      }
+
+      // ---- 刀落红环 + 十字闪光 + 原剧三段经典语音（惨叫 → 萨日朗 → 结尾原声）----
+      if (T >= 0.48 && !S.campaignCatchBlood) {
+        S.campaignCatchBlood = true;
+        bloodRingT = 0.85;
+        bloodRing.visible = true;
+        piguaHitSpark.position.set(player.position.x, player.position.y + 1.18, player.position.z + 0.28);
+        piguaHitSpark.rotation.set(0, 0, 0.35);
+        piguaHitSpark.scale.setScalar(0.6);
+        piguaHitSpark.visible = true;
+        piguaSparkT = 0.26;
+        if (window.Runners) {
+          window.Runners.setBloodyHands(haoGe, true);
+          window.Runners.setBloodyKnife(huaQiang, true);
+        }
+        window.AppAudio.chop();
+        S.shake = 0.55;
+        S.flash = 0.72;
+      }
+      if (piguaSparkT > 0) {
+        piguaSparkT = Math.max(0, piguaSparkT - dt);
+        var csk = piguaSparkT / 0.26;
+        var csc = 0.65 + (1 - csk) * 1.05;
+        piguaHitSpark.scale.set(csc, csc, 1);
+        piguaSparkMat.opacity = csk * 0.95;
+        if (piguaSparkT <= 0) piguaHitSpark.visible = false;
+      }
+      if (T >= 0.56 && !S.campaignCatchScream) {
+        S.campaignCatchScream = true;
+        window.AppAudio.playVoice('scream');
+      }
+      if (T >= 1.35 && !S.campaignCatchSarilang) {
+        S.campaignCatchSarilang = true;
+        showBubble('萨日朗！这瓜保熟吗……', false);
+        window.AppAudio.playVoice('sarilang');
+      }
+      if (T >= 4.05 && !S.campaignCatchEnding) {
+        S.campaignCatchEnding = true;
+        window.AppAudio.playVoice('ending');
+      }
+
       if (S.campaignCatchT <= 0) finishChapter('caught');
       return;
     }
@@ -3657,6 +3902,7 @@
       window.RunnerAnim.freeze(xiaoDiModel);
     }
     if (ua && ua.clearRigPose) ua.clearRigPose();
+    if (up && up.clearRigPose) up.clearRigPose();
 
     if (S.canSkipEnding && T >= CONFIG.endingSkipAt && !S.deathOverShown) {
       show('skipBtn');
@@ -3894,6 +4140,10 @@
   }
 
   function skipEnding() {
+    if (S.campaignCatchT > 0) {
+      finishChapter('caught');
+      return;
+    }
     if (S.mode !== 'gameover' || S.deathOverShown) return;
     S.deathSkipped = true;
     S.deathOverShown = true;
@@ -3973,6 +4223,7 @@
 
   function animateCharacters(dt) {
     if (cast && !cast.isReady()) return;
+    if (S.campaignCatchT > 0) return;
     var rig = haoGe.userData.isPureGLB ? haoGe.userData : null;
     if (rig) rig.groundPose = false;
     if (window.RunnerAnim && (
@@ -4220,6 +4471,26 @@
       camera.lookAt(0, 1.3, -10);
       return;
     }
+    if (S.campaignCatchT > 0) {
+      var catchElapsed = (S.campaignCatchMax || 6.2) - S.campaignCatchT;
+      var stageA = catchElapsed < 1.55;
+      var stageC = catchElapsed >= 2.65;
+      var fxCam = Math.min(3.55, Math.max(2.65, player.position.x + 2.85));
+      var fzCam = player.position.z + 4.2;
+      var goalX = stageC ? (fxCam - 2.1) : (player.position.x * 0.55 + (stageA ? 0.85 : 0.45));
+      var goalY = stageC ? 2.45 : (stageA ? 2.65 : 3.25);
+      var goalZ = stageC ? (fzCam + 4.35) : (stageA ? 5.35 : 7.45);
+      camera.position.x += (goalX - camera.position.x) * Math.min(1, dt * 4.5);
+      camera.position.y += (goalY - camera.position.y) * Math.min(1, dt * 4.2);
+      camera.position.z += (goalZ - camera.position.z) * Math.min(1, dt * 4.2);
+      var cLookX = stageC ? (fxCam - 0.55) : (player.position.x * 0.5 + (stageA ? 0.05 : 0.42));
+      var cLookY = stageC ? 1.25 : (stageA ? 1.15 : 1.25);
+      var cLookZ = stageC ? (fzCam - 0.15) : (player.position.z + (stageA ? 0.35 : 0.95));
+      camera.lookAt(cLookX, cLookY, cLookZ);
+      el.vignette.style.opacity = Math.min(0.62, (stageC ? 0.22 : 0.32) + Math.min(1, catchElapsed * 1.4) * 0.18 + S.flash).toFixed(3);
+      S.flash = Math.max(0, S.flash - dt * 0.8);
+      return;
+    }
     if (S.mode === 'gameover') {
       if (S.deathT >= 8.4) {
         // 结尾特写：跟随华强，定格得意侧脸
@@ -4357,6 +4628,11 @@
     if (campaign && S.mode === 'chapter' && (k === 'Enter' || k === ' ')) {
       e.preventDefault();
       nextChapter();
+      return;
+    }
+    if (S.campaignCatchT > 0 && ((S.campaignCatchMax || 6.2) - S.campaignCatchT) >= 3.0 && (k === 'Enter' || k === ' ')) {
+      e.preventDefault();
+      skipEnding();
       return;
     }
     if (S.mode === 'gameover' && S.canSkipEnding && !S.deathOverShown && (k === 'Enter' || k === ' ')) {
