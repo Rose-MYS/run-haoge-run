@@ -101,6 +101,7 @@
       <button id="eggBtn" class="btn btn-small">彩蛋图鉴</button>
       <button id="helpBtn" class="btn btn-small">玩法说明</button>
       <button id="voiceBtn" class="btn btn-small">语音包</button>
+      <button id="prequelBtn" class="btn btn-small">前情提要</button>
       <button id="modeSwitchBtn" class="btn btn-small">切换模式</button>
     </div>
     <button id="chapterNewRun" class="btn btn-small" hidden>从第一段开始</button>
@@ -228,6 +229,7 @@
 <script src="js/characters.js?v=4"></script>
 <script src="js/toon.js?v=3"></script>
 <script>
+  window.HAOGE_PUBLISH_CAST_URL = 'assets/published/cast.js?v=409eea5c-4f100e46';
   if (window.HAOGE_CAMPAIGN) {
     document.getElementById('startBtn').disabled = true;
     const status = document.getElementById('streetLoadStatus');
@@ -235,8 +237,7 @@
     status.hidden = false;
   }
 </script>
-<script src="assets/published/cast.js?v=409eea5c-4f100e46"></script>
-<script src="js/models.js?v=9"></script>
+<script src="js/models.js?v=10"></script>
 <script src="js/animations.js?v=3"></script>
 <script src="js/obstacles.js?v=3"></script>
 <script src="js/street-pedestrian.js?v=3"></script>
@@ -252,6 +253,7 @@
 <script src="js/street-feedback.js?v=1"></script>
 <script src="js/legacy-scenery.js?v=1"></script>
 <script src="js/ui-modals.js?v=2"></script>
-<script src="js/game.js?v=13"></script>
+<script src="js/street-prequel.js?v=1"></script>
+<script src="js/game.js?v=14"></script>
 </body>
 </html>

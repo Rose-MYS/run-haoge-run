@@ -343,11 +343,101 @@
   var streetModelRetry = false;
   var startAfterModels = false;
 
+  function loadPublishedCastAsync(onProgress, onDone) {
+    if (window.HAOGE_APPROVED_CAST) {
+      if (onProgress) onProgress(1, 0, 0);
+      onDone(true);
+      return;
+    }
+    var url = window.HAOGE_PUBLISH_CAST_URL;
+    if (!url) {
+      onDone(false);
+      return;
+    }
+    if (location.protocol === 'file:' || typeof fetch !== 'function') {
+      var s = document.createElement('script');
+      s.src = url;
+      s.async = true;
+      s.onload = function () {
+        if (window.RunnerModels && window.RunnerModels.refreshPublishedCast) window.RunnerModels.refreshPublishedCast();
+        if (onProgress) onProgress(1, 0, 0);
+        onDone(!!window.HAOGE_APPROVED_CAST);
+      };
+      s.onerror = function () { onDone(false); };
+      document.head.appendChild(s);
+      return;
+    }
+    fetch(url).then(function (res) {
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      var total = Number(res.headers.get('content-length')) || 16031899;
+      if (!res.body || !res.body.getReader) {
+        return res.text().then(function (txt) {
+          if (onProgress) onProgress(1, total, total);
+          return txt;
+        });
+      }
+      var reader = res.body.getReader();
+      var chunks = [];
+      var received = 0;
+      var decoder = new TextDecoder('utf-8');
+      function pump() {
+        return reader.read().then(function (result) {
+          if (result.done) {
+            chunks.push(decoder.decode());
+            return chunks.join('');
+          }
+          received += result.value.byteLength;
+          chunks.push(decoder.decode(result.value, { stream: true }));
+          if (onProgress) onProgress(Math.min(0.99, received / Math.max(received, total)), received, total);
+          return pump();
+        });
+      }
+      return pump();
+    }).then(function (scriptText) {
+      (new Function(scriptText))();
+      if (window.RunnerModels && window.RunnerModels.refreshPublishedCast) window.RunnerModels.refreshPublishedCast();
+      if (onProgress) onProgress(1, 0, 0);
+      onDone(!!window.HAOGE_APPROVED_CAST);
+    }).catch(function () {
+      onDone(false);
+    });
+  }
+
   function loadCharacters() {
     var models = window.RunnerModels;
     if (!models || !models.loadRunner) return;
-    var wait = streetRoute && models.usesGltf();
     var status = document.getElementById('streetLoadStatus');
+    var isHttp = location.protocol === 'http:' || location.protocol === 'https:';
+    var prequelSeen = false;
+    try { prequelSeen = !!localStorage.getItem('haoge_prequel_seen'); } catch (e) {}
+
+    if (cast && window.HAOGE_PUBLISH_CAST && window.HAOGE_PUBLISH_CAST_URL && !window.HAOGE_APPROVED_CAST) {
+      el.startBtn.disabled = true;
+      status.textContent = '正在下载角色模型…';
+      status.hidden = false;
+      var usePrequelWhileLoading = isHttp && !!window.StreetPrequel;
+      if (usePrequelWhileLoading) {
+        window.StreetPrequel.open({ mode: 'loading', ready: false });
+      }
+      loadPublishedCastAsync(function (pct, loaded, total) {
+        var pctNum = Math.round((pct || 0) * 100);
+        if (!status.hidden) status.textContent = '正在下载角色模型 ' + pctNum + '%…';
+        if (usePrequelWhileLoading) window.StreetPrequel.setProgress(pct, loaded, total);
+      }, function (ok) {
+        if (!ok) {
+          streetModelBlocked = streetModelRetry = true;
+          el.startBtn.disabled = false;
+          el.startBtn.textContent = '重新加载';
+          status.textContent = '角色模型下载失败，请刷新或重试';
+          if (usePrequelWhileLoading) window.StreetPrequel.setReady(true);
+          return;
+        }
+        loadCharacters();
+      });
+      return;
+    }
+
+    var wait = streetRoute && models.usesGltf();
     if (cast && !wait) {
       streetModelBlocked = true;
       streetModelRetry = !!window.HAOGE_PUBLISH_CAST;
@@ -369,6 +459,9 @@
       el.startBtn.disabled = true;
       status.textContent = '正在准备角色…';
       status.hidden = false;
+      if (isHttp && !prequelSeen && window.StreetPrequel && !window.StreetPrequel.isOpen()) {
+        window.StreetPrequel.open({ mode: 'firstVisit', ready: false });
+      }
     }
     function complete(ready) {
       if (!ready) {
@@ -377,6 +470,7 @@
         el.startBtn.disabled = false;
         el.startBtn.textContent = '重新加载';
         status.textContent = '角色模型未就绪，请重新加载';
+        if (window.StreetPrequel && window.StreetPrequel.isOpen()) window.StreetPrequel.setReady(true);
         return;
       }
       haoGe.visible = huaQiang.visible = true;
@@ -384,6 +478,9 @@
       el.startBtn.disabled = false;
       status.hidden = !streetModelFallback;
       status.textContent = streetModelFallback ? '部分模型加载失败，可用备用角色游玩' : '';
+      if (window.StreetPrequel && window.StreetPrequel.isOpen()) {
+        window.StreetPrequel.setReady(true);
+      }
       if (startAfterModels) startGame();
     }
     if (cast) {
@@ -4240,7 +4337,18 @@
   el.skipBtn.addEventListener('click', skipEnding);
   el.introNext.addEventListener('click', advanceIntro);
   el.introSkip.addEventListener('click', function () { finishIntro(false); });
-  el.introReplay.addEventListener('click', showIntro);
+  if ($('prequelBtn')) $('prequelBtn').addEventListener('click', function () {
+    if (window.StreetPrequel) window.StreetPrequel.open({ mode: 'replay', ready: true });
+  });
+  el.introReplay.addEventListener('click', function () {
+    if (window.StreetPrequel) {
+      if (window.GameModals) {}
+      hide('helpModal');
+      window.StreetPrequel.open({ mode: 'replay', ready: true });
+    } else {
+      showIntro();
+    }
+  });
   el.tipReplay.addEventListener('click', function () {
     try { localStorage.removeItem('haoge_tips_seen'); } catch (e) {}
     S.tipsEnabled = true;

@@ -1221,9 +1221,17 @@ window.RunnerModels = (function () {
     }
   }
 
-  return {
-    loadRunner: loadRunner,
-    usesGltf: function () {
+    return {
+      loadRunner: loadRunner,
+      refreshPublishedCast: function () {
+        approved = publishedCampaign && window.HAOGE_APPROVED_CAST;
+        REFINED_CHASER_URL = approved ? approved.huaqiang : 'assets/models/huaqiang-refined.glb';
+        MODEL_URLS.haoge = approved ? approved.haoge : (campaignMode ? REVIEWED_HAOGE_URL : 'assets/models/haoge.glb');
+        HAOGE_PACKS[0].url = MODEL_URLS.haoge;
+        modelsEmbedded = MODEL_URLS.haoge.indexOf('data:') === 0;
+        refinedChaser = campaignMode || params.get('chaser') === 'refined' || REFINED_CHASER_URL.indexOf('data:') === 0;
+      },
+      usesGltf: function () {
       if (publishedCampaign) return modelsEmbedded && REFINED_CHASER_URL.indexOf('data:') === 0;
       return !proceduralPreview && (!fromFile || modelsEmbedded);
     },

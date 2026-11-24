@@ -579,6 +579,156 @@
   to { transform: translateX(-50%) scale(1.05); }
 }
 
+/* 3D 前情提要过场遮罩 */
+.prequel-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 95;
+  background: #0d1412;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  pointer-events: auto;
+}
+.prequel-overlay.hidden { display: none; }
+#prequelCanvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+.prequel-top,
+.prequel-bottom {
+  position: relative;
+  z-index: 2;
+  padding: 14px clamp(14px, 3vw, 28px);
+  color: #fff6de;
+  font-family: system-ui, -apple-system, "PingFang SC", sans-serif;
+}
+.prequel-top {
+  background: linear-gradient(180deg, rgba(10, 18, 15, 0.88) 0%, rgba(10, 18, 15, 0) 100%);
+}
+.prequel-bottom {
+  background: linear-gradient(0deg, rgba(10, 18, 15, 0.94) 0%, rgba(10, 18, 15, 0.72) 68%, rgba(10, 18, 15, 0) 100%);
+  padding-top: 28px;
+}
+.prequel-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.prequel-title {
+  font-weight: 800;
+  font-size: clamp(0.95rem, 2vw, 1.15rem);
+  letter-spacing: 0.04em;
+  color: #facc15;
+}
+.prequel-actions-top { display: flex; gap: 8px; align-items: center; }
+.prequel-audio-hint,
+.prequel-audio-btn {
+  border: 1px solid rgba(250, 204, 21, 0.55);
+  background: rgba(20, 36, 30, 0.86);
+  color: #fef3c7;
+  border-radius: 999px;
+  padding: 5px 12px;
+  font-size: 0.84rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+.prequel-audio-hint {
+  background: #b45309;
+  color: #fffbeb;
+  animation: streetTurnPulse 0.75s ease-in-out infinite alternate;
+}
+.prequel-acts {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+  flex-wrap: wrap;
+}
+.prequel-act {
+  font-size: 0.76rem;
+  padding: 3px 9px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.10);
+  color: rgba(255, 246, 222, 0.65);
+}
+.prequel-act.is-active {
+  background: #eab308;
+  color: #1c1917;
+  font-weight: 800;
+}
+.prequel-act.is-done {
+  background: rgba(132, 204, 22, 0.25);
+  color: #d9f99d;
+}
+.prequel-sub-box {
+  max-width: 780px;
+  margin: 0 auto 12px;
+  padding: 10px 16px;
+  border-radius: 8px;
+  background: rgba(12, 22, 18, 0.84);
+  border-left: 4px solid #facc15;
+  font-size: clamp(0.95rem, 2.2vw, 1.15rem);
+  line-height: 1.45;
+}
+.prequel-speaker {
+  display: inline-block;
+  margin-right: 8px;
+  padding: 1px 8px;
+  border-radius: 4px;
+  background: #b91c1c;
+  color: #fff;
+  font-weight: 800;
+  font-size: 0.88em;
+}
+.prequel-foot {
+  max-width: 780px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+.prequel-progress-wrap { flex: 1 1 260px; }
+.prequel-progress-track {
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.18);
+  overflow: hidden;
+}
+.prequel-progress-fill {
+  height: 100%;
+  width: 0%;
+  background: linear-gradient(90deg, #f59e0b, #84cc16);
+  transition: width 0.16s linear;
+}
+.prequel-progress-text {
+  margin-top: 5px;
+  font-size: 0.8rem;
+  color: #e5e7eb;
+}
+.prequel-skip-btn {
+  padding: 9px 18px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  background: rgba(55, 65, 81, 0.85);
+  color: #e5e7eb;
+  font-weight: 700;
+  font-size: 0.92rem;
+  cursor: not-allowed;
+}
+.prequel-skip-btn.is-ready {
+  border-color: #bef264;
+  background: #65a30d;
+  color: #f7fee7;
+  cursor: pointer;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .street-ui *, .street-ui *::before, .street-ui *::after {
     scroll-behavior: auto !important;
