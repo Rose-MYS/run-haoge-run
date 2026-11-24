@@ -466,7 +466,7 @@
     return root;
   }
 
-  function animateElephant(el, t, mode) {
+  function animateElephant(el, t, mode, intensity) {
     if (!el || !el.userData) return;
     var u = el.userData;
     var speed = mode === 'charge' ? 10.5 : (mode === 'startle' ? 13.5 : 3.8);
@@ -479,6 +479,32 @@
       leg.hip.rotation.x = s * swing;
       // 前腿向后自然微屈，后腿向前微屈，步态更逼真
       leg.knee.rotation.x = (isFront ? 0.32 : 0.26) * lift * (mode === 'charge' ? 1.4 : 1.0);
+    }
+
+    if (mode === 'trumpet') {
+      var env = intensity === undefined ? 1 : Math.max(0, Math.min(1, intensity));
+      var vib = Math.sin(t * 22);
+      var stomp = Math.sin(t * 14);
+      // 象鸣时前躯明显昂起、前腿抬蹄踏地、双耳大幅张开扇动、长鼻高举震颤
+      u.bodyPivot.position.y = 1.66 + 0.34 * env + Math.abs(vib) * 0.05 * env;
+      u.bodyPivot.rotation.x = -0.26 * env;
+      u.bodyPivot.rotation.z = Math.sin(t * 10) * 0.045 * env;
+      u.headGroup.rotation.x = -0.44 * env + vib * 0.07 * env;
+      u.trunkBase.rotation.x = -1.68 * env + Math.sin(t * 19) * 0.14 * env;
+      u.trunkMid.rotation.x = -0.82 * env + Math.cos(t * 19) * 0.12 * env;
+      u.trunkTip.rotation.x = -0.58 * env + vib * 0.10 * env;
+      u.earL.rotation.y = 0.22 + 0.78 * env + Math.sin(t * 24) * 0.18 * env;
+      u.earR.rotation.y = -0.22 - 0.78 * env - Math.sin(t * 24) * 0.18 * env;
+      u.tailPivot.rotation.z = Math.sin(t * 20) * 0.48 * env;
+      u.legFL.hip.rotation.x = -0.68 * env + stomp * 0.16 * env;
+      u.legFR.hip.rotation.x = -0.56 * env - stomp * 0.16 * env;
+      u.legFL.knee.rotation.x = 0.74 * env;
+      u.legFR.knee.rotation.x = 0.64 * env;
+      u.legBL.hip.rotation.x = 0.22 * env;
+      u.legBR.hip.rotation.x = 0.22 * env;
+      u.legBL.knee.rotation.x = 0.12 * env;
+      u.legBR.knee.rotation.x = 0.12 * env;
+      return;
     }
 
     stepLeg(u.legFL, 0, true);

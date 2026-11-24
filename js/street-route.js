@@ -224,32 +224,51 @@ window.StreetRoute = (function () {
     });
     blockerRoot.add(barrierGroup);
 
-    // 全幅过路大象家庭群（两头成年象前后留出安全间距不互撞，小象在后侧伴行）
+    // 过路大象家庭群（面向来车方向整齐列队在沥青路面内，杜绝与路侧楼房穿模，象鸣时正面清晰展示昂头举鼻与声波环）
     var elephantConvoy = new THREE.Group();
     var elephantSpecs = [
-      { baseScale: 1.24, baseX: -2.65, baseZ: 0.0, phase: 0.0 },
-      { baseScale: 1.20, baseX: 2.65, baseZ: 0.0, phase: 0.9 },
-      { baseScale: 0.78, baseX: 0.0, baseZ: -2.25, phase: 1.6 },
+      { baseScale: 1.02, slotX: -1, baseZ: -0.10, yawOff: 0.16, phase: 0.0 },
+      { baseScale: 0.98, slotX: 1, baseZ: -0.45, yawOff: -0.16, phase: 0.9 },
+      { baseScale: 0.64, slotX: 0, baseZ: 1.35, yawOff: 0.0, phase: 1.6 },
     ];
     var convoyMembers = [];
     if (window.StreetElephant) {
       elephantSpecs.forEach(function (spec) {
         var el = window.StreetElephant.createElephant({ royal: false });
         el.scale.setScalar(spec.baseScale);
-        el.position.set(spec.baseX, 0, spec.baseZ);
+        el.position.set(0, 0, spec.baseZ);
         elephantConvoy.add(el);
         convoyMembers.push({
           el: el,
           baseScale: spec.baseScale,
-          baseX: spec.baseX,
+          slotX: spec.slotX,
           baseZ: spec.baseZ,
+          yawOff: spec.yawOff,
           phase: spec.phase
         });
       });
     }
+    // 象鸣声波扩散环（随象鸣动作同步脉动，34m 外即可一眼识别大象正在昂鼻鸣叫）
+    var trumpetWaveGroup = new THREE.Group();
+    trumpetWaveGroup.visible = false;
+    var trumpetWaves = [];
+    for (var wi = 0; wi < 2; wi++) {
+      var waveMat = new THREE.MeshBasicMaterial({
+        color: wi === 0 ? 0xffefc2 : 0xffd27d,
+        transparent: true,
+        opacity: 0,
+        side: THREE.DoubleSide,
+        depthWrite: false
+      });
+      var waveMesh = new THREE.Mesh(new THREE.TorusGeometry(0.95, 0.075, 8, 24), waveMat);
+      waveMesh.rotation.x = Math.PI / 2;
+      trumpetWaveGroup.add(waveMesh);
+      trumpetWaves.push({ mesh: waveMesh, mat: waveMat, offset: wi * 0.5 });
+    }
+    elephantConvoy.add(trumpetWaveGroup);
     blockerRoot.add(elephantConvoy);
 
-    return function draw(turn, distance, project, streetWidth, chosen, playing, elapsed, pastResult) {
+    return function draw(turn, distance, project, streetWidth, chosen, playing, elapsed, pastResult, trumpetState) {
       var showTurnPrompt = !!(playing && turn && distance >= turn.distance - NOTICE);
       group.visible = showTurnPrompt;
       if (showTurnPrompt) {
@@ -282,33 +301,66 @@ window.StreetRoute = (function () {
       var sideX = Math.cos(base.yaw);
       var sideZ = -Math.sin(base.yaw);
       var isElephant = blockerType === 'elephant' && convoyMembers.length;
-      var ahead = isElephant ? 12.6 : 11.4;
-      var outShift = -blockerTurn.direction * (isElephant ? 1.25 : 1.0);
+      // 大象严格停在弯口沥青路面中央（ahead=4.2, outShift=0），避免伸入外侧人行道与楼房穿模
+      var ahead = isElephant ? 4.2 : 11.4;
+      var outShift = isElephant ? 0 : -blockerTurn.direction * 1.0;
 
       blockerRoot.position.set(
         base.x + fwdX * ahead + sideX * outShift,
         0,
         base.z + fwdZ * ahead + sideZ * outShift
       );
-      blockerRoot.rotation.y = base.yaw - blockerTurn.direction * (isElephant ? 0.20 : 0.14);
+      blockerRoot.rotation.y = isElephant ? base.yaw : (base.yaw - blockerTurn.direction * 0.14);
 
       var walkT = elapsed || 0;
       if (isElephant) {
         barrierGroup.visible = false;
         elephantConvoy.visible = true;
-        var roadScale = Math.min(1, streetWidth(blockerTurn.distance) / 4.35);
-        var scaleFactor = 0.78 + 0.22 * roadScale;
-        var crossOffset = Math.sin(walkT * 0.7) * 0.42 * roadScale;
-        var crossDir = Math.cos(walkT * 0.7) >= 0 ? 1 : -1;
+        var halfW = streetWidth(blockerTurn.distance);
+        var roadScale = Math.min(1, halfW / 4.35);
+        var scaleFactor = 0.80 + 0.20 * roadScale;
+        var spreadX = Math.max(1.12, (halfW - 1.55) * 0.72);
+        var idleSway = Math.sin(walkT * 0.85) * 0.12 * roadScale;
+        var trumpetEnv = 0;
+        if (trumpetState && trumpetState.active && trumpetState.dur > 0) {
+          var tp = Math.max(0, Math.min(1, (walkT - trumpetState.startT) / trumpetState.dur));
+          if (tp < 1) {
+            if (tp < 0.18) trumpetEnv = tp / 0.18;
+            else if (tp < 0.78) trumpetEnv = 1;
+            else trumpetEnv = Math.max(0, (1 - tp) / 0.22);
+          }
+        }
+        var isTrumpeting = trumpetEnv > 0.02;
         for (var mi = 0; mi < convoyMembers.length; mi++) {
           var m = convoyMembers[mi];
           m.el.scale.setScalar(m.baseScale * scaleFactor);
-          m.el.position.set(m.baseX * roadScale + crossOffset, 0, m.baseZ * scaleFactor);
-          m.el.rotation.y = crossDir > 0 ? Math.PI / 2 : -Math.PI / 2;
-          window.StreetElephant.animateElephant(m.el, walkT + m.phase, showMissed ? 'startle' : 'walk');
+          m.el.position.set(m.slotX * spreadX + idleSway, 0, m.baseZ * scaleFactor);
+          // 大象局部坐标头部朝 +Z，rotation.y≈0 时正面向迎面跑来的玩家，正面呈现昂头举鼻、扇耳与声波环
+          m.el.rotation.y = m.yawOff + Math.sin(walkT * 0.9 + m.phase) * 0.06;
+          if (showMissed) {
+            window.StreetElephant.animateElephant(m.el, walkT + m.phase, 'trumpet', 1);
+          } else if (isTrumpeting) {
+            window.StreetElephant.animateElephant(m.el, walkT + m.phase * 0.35, 'trumpet', trumpetEnv);
+          } else {
+            window.StreetElephant.animateElephant(m.el, walkT + m.phase, 'walk');
+          }
+        }
+        trumpetWaveGroup.visible = isTrumpeting || showMissed;
+        if (trumpetWaveGroup.visible) {
+          var waveEnv = showMissed ? 1 : trumpetEnv;
+          trumpetWaveGroup.position.set(idleSway, 3.35 * scaleFactor, 0.35 * scaleFactor);
+          for (var wj = 0; wj < trumpetWaves.length; wj++) {
+            var w = trumpetWaves[wj];
+            var wp = (walkT * 1.65 + w.offset) % 1;
+            var ws = 0.65 + wp * 2.1;
+            w.mesh.scale.set(ws, ws, 1);
+            w.mesh.position.y = wp * 1.15;
+            w.mat.opacity = (1 - wp) * 0.78 * waveEnv;
+          }
         }
       } else {
         elephantConvoy.visible = false;
+        trumpetWaveGroup.visible = false;
         barrierGroup.visible = true;
         beaconMat.emissiveIntensity = 0.45 + 0.55 * (0.5 + 0.5 * Math.sin(walkT * 10));
       }
@@ -327,6 +379,8 @@ window.StreetRoute = (function () {
     var resultTurn = null;
     var trumpetTurn = null;
     var trumpetStage = 0;
+    var lastElapsed = 0;
+    var trumpetAnim = { active: false, startT: 0, dur: 0 };
     var hint = document.createElement('div');
     hint.className = 'street-turn';
     hint.hidden = true;
@@ -532,6 +586,9 @@ window.StreetRoute = (function () {
       resultTurn = null;
       trumpetTurn = null;
       trumpetStage = 0;
+      trumpetAnim.active = false;
+      trumpetAnim.startT = 0;
+      trumpetAnim.dur = 0;
       banner.hidden = true;
       updateHint(distance);
     }
@@ -554,10 +611,16 @@ window.StreetRoute = (function () {
         }
         if (trumpetStage < 1 && distance >= turn.distance - NOTICE) {
           trumpetStage = 1;
+          trumpetAnim.active = true;
+          trumpetAnim.startT = lastElapsed;
+          trumpetAnim.dur = 1.45;
           if (window.AppAudio) window.AppAudio.playVoice('daxiang');
         }
         if (trumpetStage < 2 && distance >= turn.distance - TURN_WINDOW) {
           trumpetStage = 2;
+          trumpetAnim.active = true;
+          trumpetAnim.startT = lastElapsed;
+          trumpetAnim.dur = 2.05;
           if (window.AppAudio) window.AppAudio.playVoiceChain('daxiang', 2, 520);
         }
       }
@@ -631,8 +694,12 @@ window.StreetRoute = (function () {
         if (!stages) hint.hidden = true;
         banner.hidden = true;
       }
+      lastElapsed = elapsed || 0;
+      if (trumpetAnim.active && lastElapsed >= trumpetAnim.startT + trumpetAnim.dur) {
+        trumpetAnim.active = false;
+      }
       drawStreet(distance, elapsed);
-      drawMarkers(routeTurns[nextTurn], distance, project, streetWidth, chosen, playing, elapsed, resultTurn);
+      drawMarkers(routeTurns[nextTurn], distance, project, streetWidth, chosen, playing, elapsed, resultTurn, trumpetAnim);
       try {
         scene.children.forEach(function (obj) {
           if (!obj.visible || obj.isLight || excluded.has(obj)) {
