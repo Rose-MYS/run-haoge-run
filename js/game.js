@@ -182,6 +182,62 @@
   endingFamily.visible = false;
   scene.add(endingFamily);
 
+  // 摩托车排气管蓝白尾气轻量 3D 烟雾池（兼容 streetRoute 曲线投影）
+  var exhaustPuffs = [];
+  var exhaustPuffGeo = new THREE.SphereGeometry(0.11, 8, 6);
+  for (var epi = 0; epi < 12; epi++) {
+    var epMat = new THREE.MeshBasicMaterial({
+      color: 0xc8dcf0,
+      transparent: true,
+      opacity: 0,
+      depthWrite: false
+    });
+    var epMesh = new THREE.Mesh(exhaustPuffGeo, epMat);
+    epMesh.visible = false;
+    scene.add(epMesh);
+    exhaustPuffs.push({ mesh: epMesh, mat: epMat, life: 0, maxLife: 0.75, vx: 0, vy: 0, vz: 0 });
+  }
+  var exhaustEmitCd = 0;
+  var exhaustTipWorld = new THREE.Vector3();
+  function emitExhaustPuff() {
+    if (!scooter.userData || !scooter.userData.exhaustTip) return;
+    scooter.updateMatrixWorld(true);
+    scooter.userData.exhaustTip.getWorldPosition(exhaustTipWorld);
+    for (var i = 0; i < exhaustPuffs.length; i++) {
+      var pf = exhaustPuffs[i];
+      if (pf.life > 0) continue;
+      pf.life = pf.maxLife;
+      pf.mesh.visible = true;
+      pf.mesh.position.copy(exhaustTipWorld);
+      pf.mesh.scale.setScalar(0.55);
+      pf.mat.opacity = 0.52;
+      pf.vx = (Math.random() - 0.5) * 0.45;
+      pf.vy = 0.65 + Math.random() * 0.35;
+      pf.vz = -1.2 - Math.random() * 0.6;
+      return;
+    }
+  }
+  function updateExhaustPuffs(dt) {
+    for (var i = 0; i < exhaustPuffs.length; i++) {
+      var pf = exhaustPuffs[i];
+      if (pf.life <= 0) continue;
+      pf.life = Math.max(0, pf.life - dt);
+      var k = 1 - pf.life / pf.maxLife;
+      pf.mesh.position.x += pf.vx * dt;
+      pf.mesh.position.y += pf.vy * dt;
+      pf.mesh.position.z += pf.vz * dt;
+      pf.mesh.scale.setScalar(0.55 + k * 2.1);
+      pf.mat.opacity = (1 - k) * 0.48;
+      if (pf.life <= 0) pf.mesh.visible = false;
+    }
+  }
+  function clearExhaustPuffs() {
+    for (var i = 0; i < exhaustPuffs.length; i++) {
+      exhaustPuffs[i].life = 0;
+      exhaustPuffs[i].mesh.visible = false;
+    }
+  }
+
   /* ---------------- 角色 ---------------- */
   function makeNameTag(text, bg, fg) {
     var c = document.createElement('canvas');
@@ -2858,12 +2914,14 @@
     if (campaign) {
       if (S.campaignCatchT > 0) return;
       cleanupPigua();
-      S.campaignCatchMax = 6.2;
+      S.campaignCatchMax = 7.8;
       S.campaignCatchT = S.campaignCatchMax;
       S.campaignCatchBlood = false;
       S.campaignCatchScream = false;
+      S.campaignCatchThreat = false;
       S.campaignCatchSarilang = false;
       S.campaignCatchFamily = false;
+      S.campaignCatchSmirk = false;
       S.campaignCatchEnding = false;
       S.deathFromX = chaser.position.x;
       S.deathFromZ = Math.min(chaser.position.z, player.position.z + 3.2);
@@ -2876,6 +2934,10 @@
       scooter.visible = false;
       endingFamily.visible = false;
       resetFamilyPose(endingFamily);
+      clearExhaustPuffs();
+      exhaustEmitCd = 0;
+      if (huaQiang.userData && huaQiang.userData.setKnifeVisible) huaQiang.userData.setKnifeVisible(true);
+      hide('hud');
       hide('skipBtn');
       hide('skipHint');
       window.AppAudio.caught();
@@ -3241,6 +3303,9 @@
     scooter.visible = false;
     endingFamily.visible = false;
     resetFamilyPose(endingFamily);
+    clearExhaustPuffs();
+    if (huaQiang.userData && huaQiang.userData.setKnifeVisible) huaQiang.userData.setKnifeVisible(true);
+    if (window.Runners) window.Runners.setFace(huaQiang, 'huaqiang');
     bloodRing.visible = false;
     bloodRingT = 0;
     bloodFountainT = 0;
@@ -3309,17 +3374,20 @@
     if (S.perfectVoiceCd > 0) S.perfectVoiceCd = Math.max(0, S.perfectVoiceCd - dt);
     if (S.campaignCatchT > 0) {
       S.campaignCatchT = Math.max(0, S.campaignCatchT - dt);
-      var catchDur = S.campaignCatchMax || 4.9;
+      var catchDur = S.campaignCatchMax || 7.8;
       var T = Math.min(catchDur, catchDur - S.campaignCatchT);
       var ua = huaQiang.userData;
       var up = haoGe.userData;
+      var ud = xiaoDiModel.userData;
       var rushEnd = 0.34;
       if (window.RunnerAnim) {
         window.RunnerAnim.freeze(haoGe);
         if (T >= rushEnd) window.RunnerAnim.freeze(huaQiang);
+        window.RunnerAnim.freeze(xiaoDiModel);
       }
       if (ua && ua.clearRigPose) ua.clearRigPose();
       if (up && up.clearRigPose) up.clearRigPose();
+      updateExhaustPuffs(dt);
 
       // 3.0s 后显示跳过按钮，玩家可点击或按 Enter/空格 跳过直接进入结算
       if (T >= 3.0) {
@@ -3327,7 +3395,12 @@
         show('skipHint');
       }
 
-      // ---- 华强动作：冲刺贴近 → 蓄力挥刀斜劈 → 收刀站定 → 跨上电动车扬长而去 ----
+      var fx = Math.min(3.95, Math.max(3.15, player.position.x + 3.25));
+      var fz = player.position.z + 5.6;
+      scooter.scale.setScalar(1.36);
+      xiaoDi.scale.setScalar(1.26);
+
+      // ---- 镜头 1 (0.00-0.90s): 华强冲刺近身暴起捅刀 ----
       if (T < rushEnd) {
         var rp = easeOut(Math.min(1, T / rushEnd));
         chaser.position.x = S.deathFromX + (player.position.x - S.deathFromX) * rp;
@@ -3339,39 +3412,30 @@
           if (ua.spine) ua.spine.rotation.x = 0.10;
           if (ua.rightForeArm) ua.rightForeArm.rotation.x = -0.65;
         }
-      } else if (T < 0.72) {
-        var lp = (T - rushEnd) / (0.72 - rushEnd);
+      } else if (T < 0.90) {
+        var lp = (T - rushEnd) / (0.90 - rushEnd);
         chaser.position.x = player.position.x;
-        chaser.position.z = player.position.z + 1.02 - 0.45 * easeIn(lp);
+        chaser.position.z = player.position.z + 1.02 - 0.45 * easeIn(Math.min(1, lp * 1.25));
         huaQiang.rotation.set(0, Math.PI, 0);
         huaQiang.position.y = 0;
         if (ua) {
-          if (lp < 0.34) {
-            var cw = easeOut(lp / 0.34);
+          if (lp < 0.30) {
+            var cw = easeOut(lp / 0.30);
             if (ua.spine) { ua.spine.rotation.y = -0.24 * cw; ua.spine.rotation.x = -0.05 * cw; }
             if (ua.rightArm) { ua.rightArm.rotation.x = -2.05 * cw; ua.rightArm.rotation.z = 0.55; }
             if (ua.rightForeArm) ua.rightForeArm.rotation.x = -0.95 * cw;
-            if (ua.leftArm) { ua.leftArm.rotation.x = -0.40 * cw; ua.leftArm.rotation.z = -0.65; }
+            if (ua.leftArm) { ua.leftArm.rotation.x = -0.45 * cw; ua.leftArm.rotation.z = -0.65; }
             if (ua.leftForeArm) ua.leftForeArm.rotation.x = -0.65 * cw;
-            if (ua.leftLeg) ua.leftLeg.rotation.x = -0.32 * cw;
-            if (ua.leftKnee) ua.leftKnee.rotation.x = 0.38 * cw;
-            if (ua.rightLeg) ua.rightLeg.rotation.x = 0.28 * cw;
-            if (ua.rightKnee) ua.rightKnee.rotation.x = 0.20 * cw;
             piguaSlashArc.visible = false;
           } else {
-            var cs = easeIn(Math.min(1, (lp - 0.34) / 0.66));
+            var cs = easeIn(Math.min(1, (lp - 0.30) / 0.55));
             if (ua.spine) { ua.spine.rotation.y = -0.24 + 0.52 * cs; ua.spine.rotation.x = -0.05 + 0.28 * cs; }
             if (ua.chest) ua.chest.rotation.x = 0.14 * cs;
             if (ua.rightArm) { ua.rightArm.rotation.x = -2.05 + 1.35 * cs; ua.rightArm.rotation.z = 0.62; }
             if (ua.rightForeArm) ua.rightForeArm.rotation.x = -0.95 + 0.72 * cs;
-            if (ua.leftArm) { ua.leftArm.rotation.x = -0.40 + 0.55 * cs; ua.leftArm.rotation.z = -0.72; }
+            if (ua.leftArm) { ua.leftArm.rotation.x = -0.45 + 0.55 * cs; ua.leftArm.rotation.z = -0.72; }
             if (ua.leftForeArm) ua.leftForeArm.rotation.x = -0.75;
-            if (ua.leftLeg) ua.leftLeg.rotation.x = -0.32 - 0.14 * cs;
-            if (ua.leftKnee) ua.leftKnee.rotation.x = 0.38 + 0.20 * cs;
-            if (ua.rightLeg) ua.rightLeg.rotation.x = 0.28 + 0.10 * cs;
-            if (ua.rightKnee) ua.rightKnee.rotation.x = 0.20;
-            // 凌厉斜劈刀光
-            piguaSlashArc.visible = true;
+            piguaSlashArc.visible = cs < 0.96;
             piguaSlashArc.position.set(player.position.x + 0.08, 1.35 - cs * 0.42, player.position.z + 0.22);
             piguaSlashArc.rotation.set(0.22, 0.25, 0.75 - cs * 1.9);
             piguaSlashArc.scale.setScalar(1.05);
@@ -3380,75 +3444,94 @@
             piguaSlashCoreMat.opacity = sa * 0.96;
           }
         }
-      } else if (T < 1.50) {
+      } else if (T < 1.85) {
+        // ---- 镜头 2 (0.90-1.85s): 华强反手用染血尖刀冷冷指向冲上来的小弟，震慑退敌 ----
         piguaSlashArc.visible = false;
-        huaQiang.rotation.set(0, Math.PI, 0);
+        var tp2 = Math.min(1, (T - 0.90) / 0.35);
+        chaser.position.set(player.position.x + 0.18, 0, player.position.z + 0.62);
+        huaQiang.rotation.set(0, Math.PI - 1.15 * easeOut(tp2), 0);
         huaQiang.position.y = 0;
         if (ua) {
-          if (ua.spine) ua.spine.rotation.x = 0.05;
-          if (ua.leftArm) { ua.leftArm.rotation.x = 0.05; ua.leftArm.rotation.z = -0.72; }
-          if (ua.leftForeArm) ua.leftForeArm.rotation.x = -0.25;
-          if (ua.rightArm) { ua.rightArm.rotation.x = -0.22; ua.rightArm.rotation.z = 0.68; }
-          if (ua.rightForeArm) ua.rightForeArm.rotation.x = -0.52;
+          if (ua.spine) { ua.spine.rotation.y = 0.22 * tp2; ua.spine.rotation.x = 0.06; }
+          if (ua.rightArm) { ua.rightArm.rotation.set(-0.15, 1.18 * tp2, -0.42 * tp2); }
+          if (ua.rightForeArm) ua.rightForeArm.rotation.set(0, 0.18 * tp2, 0);
+          if (ua.leftArm) { ua.leftArm.rotation.x = 0.08; ua.leftArm.rotation.z = -0.10; }
         }
-      } else if (T < 2.15) {
-        // 走向停在右侧的黑色踏板电动车并自然跨上车座
+        if (!S.campaignCatchThreat && T >= 1.02) {
+          S.campaignCatchThreat = true;
+          showBubble('小弟：杀人啦！！', false);
+        }
+      } else if (T < 3.15) {
+        // ---- 镜头 3 (1.85-3.15s): 华强收刀转身走上右侧黑色踏板摩托「冀A·E7168」----
         piguaSlashArc.visible = false;
-        var pm = Math.min(1, (T - 1.50) / 0.65);
+        var pm = Math.min(1, (T - 1.85) / 1.15);
         scooter.visible = true;
         scooter.rotation.set(0, 0, 0);
-        scooter.position.set(player.position.x + 1.50, 0, player.position.z + 1.45);
-        chaser.position.x = player.position.x + 1.50 * easeOut(pm);
-        chaser.position.z = player.position.z + 0.57 + (1.28 - 0.57) * easeOut(pm);
-        huaQiang.rotation.y = Math.PI * (1 - easeOut(pm));
-        huaQiang.rotation.x = 0;
-        huaQiang.position.y = -0.22 * easeIn(pm);
-        if (ua) {
-          if (ua.leftLeg) ua.leftLeg.rotation.x = 0.55 * pm;
-          if (ua.leftKnee) ua.leftKnee.rotation.x = 0.75 * easeIn(pm);
-          if (ua.rightLeg) ua.rightLeg.rotation.x = 0.55 * pm;
-          if (ua.rightKnee) ua.rightKnee.rotation.x = 0.75 * easeIn(pm);
-          if (ua.leftArm) { ua.leftArm.rotation.x = -0.82 * pm; ua.leftArm.rotation.y = 0.24 * pm; ua.leftArm.rotation.z = 0.52 * pm; }
-          if (ua.leftForeArm) ua.leftForeArm.rotation.x = -0.35 * pm;
-          if (ua.rightArm) { ua.rightArm.rotation.x = -0.82 * pm; ua.rightArm.rotation.y = -0.36 * pm; ua.rightArm.rotation.z = -0.78 * pm; }
-          if (ua.rightForeArm) ua.rightForeArm.rotation.x = -0.45 * pm;
+        scooter.position.set(player.position.x + 1.55, 0, player.position.z + 1.50);
+        if (pm < 0.55) {
+          var wk = easeOut(pm / 0.55);
+          chaser.position.set(
+            player.position.x + 0.18 + (1.37) * wk,
+            0,
+            player.position.z + 0.62 + (0.72) * wk
+          );
+          huaQiang.rotation.set(0, 0.45 * (1 - wk), 0);
+          huaQiang.position.y = 0;
+          if (ua && ua.isGLB && window.RunnerAnim) {
+            window.RunnerAnim.play(huaQiang, 'run', { timeScale: 0.95 });
+          }
+          if (ua && ua.setKnifeVisible) ua.setKnifeVisible(true);
+        } else {
+          var mk = easeInOut((pm - 0.55) / 0.45);
+          chaser.position.set(scooter.position.x, 0, scooter.position.z - 0.22);
+          huaQiang.rotation.set(0, 0, 0);
+          huaQiang.position.y = -0.10 * mk;
+          if (ua && ua.setKnifeVisible) ua.setKnifeVisible(false);
+          if (ua && ua.applyScooterRidePose) {
+            ua.applyScooterRidePose({ mount: mk, leftFootDown: 1 - mk * 0.35 });
+          }
         }
       } else {
-        // 骑着电动车沿路加速驶离，从路边一家三口身旁掠过驶出画面（双手稳握车把）
-        var pr2 = Math.min(1, (T - 2.15) / Math.max(0.1, catchDur - 2.15));
-        var ez = easeIn(pr2);
+        // ---- 镜头 4/5/6 (3.15-7.80s): 华强骑「冀A·E7168」冒蓝白尾气加速驶离 → 掠过一家三口 → 回头邪魅一笑 ----
+        var pr2 = Math.min(1, (T - 3.15) / Math.max(0.1, catchDur - 3.15));
+        var ez = pr2 * pr2 * (1.5 - 0.5 * pr2);
         scooter.visible = true;
-        var fx = Math.min(3.55, Math.max(2.65, player.position.x + 2.85));
-        var fz = player.position.z + 4.2;
-        var scX = (player.position.x + 1.50) + (fx - 1.35 - (player.position.x + 1.50)) * Math.min(1, pr2 * 1.45) + ez * 1.4;
-        var scZ = (player.position.z + 1.45) + ez * 9.8;
+        var scX = (player.position.x + 1.55) + (fx - 1.25 - (player.position.x + 1.55)) * Math.min(1, pr2 * 1.4) + ez * 0.85;
+        var scZ = (player.position.z + 1.50) + ez * 11.8;
+        var scYaw = 0.08 + Math.sin(Math.min(1, pr2 * 2.0) * Math.PI) * 0.16;
         scooter.position.set(scX, 0, scZ);
-        scooter.rotation.y = 0.14 + ez * 0.22;
+        scooter.rotation.y = scYaw;
         var wheels = scooter.userData && scooter.userData.wheels;
         if (wheels) {
-          for (var wi = 0; wi < wheels.length; wi++) wheels[wi].rotation.x += dt * 20;
+          for (var wi = 0; wi < wheels.length; wi++) wheels[wi].rotation.x += dt * (12 + pr2 * 16);
         }
-        chaser.position.set(scooter.position.x - Math.sin(scooter.rotation.y) * 0.16, 0, scooter.position.z - Math.cos(scooter.rotation.y) * 0.16);
-        huaQiang.rotation.set(0.12, scooter.rotation.y, 0);
-        huaQiang.position.y = -0.22;
-        if (ua) {
-          if (ua.spine) ua.spine.rotation.x = 0.16;
-          if (ua.leftLeg) ua.leftLeg.rotation.x = 0.72;
-          if (ua.leftKnee) ua.leftKnee.rotation.x = 0.95;
-          if (ua.rightLeg) ua.rightLeg.rotation.x = 0.72;
-          if (ua.rightKnee) ua.rightKnee.rotation.x = 0.95;
-          if (ua.leftArm) { ua.leftArm.rotation.x = -0.96; ua.leftArm.rotation.y = 0.26; ua.leftArm.rotation.z = 0.54; }
-          if (ua.leftForeArm) ua.leftForeArm.rotation.x = -0.38;
-          if (ua.rightArm) { ua.rightArm.rotation.x = -0.35; ua.rightArm.rotation.y = -0.95; ua.rightArm.rotation.z = -0.35; }
-          if (ua.rightForeArm) ua.rightForeArm.rotation.x = -0.45;
+        chaser.position.set(scX - Math.sin(scYaw) * 0.22, 0, scZ - Math.cos(scYaw) * 0.22);
+        huaQiang.rotation.set(0.06, scYaw, 0);
+        huaQiang.position.y = -0.10;
+        if (ua && ua.setKnifeVisible) ua.setKnifeVisible(false);
+        var leftFootDown = T < 3.75 ? Math.max(0, 1 - (T - 3.15) / 0.60) : 0;
+        var smirkLook = T >= 6.05 ? easeOut(Math.min(1, (T - 6.05) / 0.45)) : 0;
+        if (ua && ua.applyScooterRidePose) {
+          ua.applyScooterRidePose({
+            mount: 1,
+            leftFootDown: leftFootDown,
+            headYaw: smirkLook * 0.88,
+            headPitch: smirkLook * 0.06
+          });
         }
-        // 路边一家三口出现并挥手张嘴呼喊「哎华强！」
-        if (T >= 2.35) {
+        // 起步与加速阶段排气管持续飘出蓝白尾气
+        exhaustEmitCd -= dt;
+        if (exhaustEmitCd <= 0 && T < 5.95) {
+          exhaustEmitCd = 0.085;
+          emitExhaustPuff();
+        }
+        // 镜头 5: 路边写实一家三口（西装爸爸挥手张嘴 + 红背心女儿 + 橄榄灰外套妈妈）喊「哎华强！」
+        if (T >= 4.40) {
           endingFamily.visible = true;
-          endingFamily.scale.setScalar(1.08);
+          endingFamily.scale.setScalar(1.26);
           endingFamily.position.set(fx, 0, fz);
-          endingFamily.rotation.y = -0.35;
-          if (T >= 2.75) {
+          endingFamily.rotation.y = -0.32;
+          if (T >= 4.88) {
             if (!S.campaignCatchFamily) {
               S.campaignCatchFamily = true;
               window.AppAudio.playVoice('aihuaqiang');
@@ -3457,25 +3540,73 @@
             var ef = endingFamily.userData && endingFamily.userData.father;
             if (ef && ef.userData) {
               if (ef.userData.rightArm) {
-                ef.userData.rightArm.rotation.z = -1.25 + Math.sin(S.time * 18) * 0.22;
-                ef.userData.rightArm.rotation.x = -0.45;
+                ef.userData.rightArm.rotation.z = 2.35 + Math.sin(S.time * 16) * 0.24;
+                ef.userData.rightArm.rotation.x = -0.35;
               }
-              if (ef.userData.head) ef.userData.head.rotation.y = 0.42;
+              if (ef.userData.rightForeArm) ef.userData.rightForeArm.rotation.z = -0.35;
+              if (ef.userData.head) ef.userData.head.rotation.y = -0.25;
               if (ef.userData.mouthClosed) ef.userData.mouthClosed.visible = false;
               if (ef.userData.mouthOpen) ef.userData.mouthOpen.visible = true;
             }
+            var em = endingFamily.userData && endingFamily.userData.mother;
+            if (em && em.userData && em.userData.head) {
+              em.userData.head.rotation.y = -0.38;
+            }
+          }
+        }
+        // 镜头 6: 华强回头邪魅一笑（侧脸特写 + 黑色后视镜入画）
+        if (T >= 6.15 && !S.campaignCatchSmirk) {
+          S.campaignCatchSmirk = true;
+          if (window.Runners) window.Runners.setFace(huaQiang, 'huaqiang-smirk');
+          hide('bubble');
+        }
+      }
+
+      // ---- 写实瓜摊小弟动作：镜头 2 冲出被刀威慑僵住 → 镜头 3 冲到郝哥身后紧紧抱住大喊「萨日朗！」----
+      if (T >= 0.90) {
+        xiaoDi.visible = true;
+        if (T < 1.85) {
+          var xdDash = easeOut(Math.min(1, (T - 0.90) / 0.40));
+          xiaoDi.position.set(
+            player.position.x - 1.65 + 0.72 * xdDash,
+            0,
+            player.position.z - 1.85 + 1.30 * xdDash
+          );
+          xiaoDi.rotation.set(0, 0, 0);
+          xiaoDiModel.rotation.y = 0.35;
+          if (ud) {
+            if (ud.leftArm) { ud.leftArm.rotation.x = -0.65; ud.leftArm.rotation.z = -0.35; }
+            if (ud.rightArm) { ud.rightArm.rotation.x = -0.85; ud.rightArm.rotation.z = 0.25; }
+          }
+        } else {
+          var xdHug = easeOut(Math.min(1, (T - 1.85) / 0.45));
+          xiaoDi.position.set(
+            (player.position.x - 0.93) + ((player.position.x + 0.12) - (player.position.x - 0.93)) * xdHug,
+            0,
+            (player.position.z - 0.55) + ((player.position.z - 0.22) - (player.position.z - 0.55)) * xdHug
+          );
+          xiaoDiModel.rotation.y = 0;
+          xiaoDi.rotation.x = 0.14 * xdHug;
+          if (ud) {
+            if (ud.leftArm) { ud.leftArm.rotation.x = -1.25 * xdHug; ud.leftArm.rotation.z = -0.25; }
+            if (ud.leftForeArm) ud.leftForeArm.rotation.x = -0.65 * xdHug;
+            if (ud.rightArm) { ud.rightArm.rotation.x = -1.25 * xdHug; ud.rightArm.rotation.z = 0.25; }
+            if (ud.rightForeArm) ud.rightForeArm.rotation.x = -0.65 * xdHug;
+            if (ud.head) ud.head.rotation.x = 0.15 * xdHug;
+            if (ud.mouthClosed) ud.mouthClosed.visible = false;
+            if (ud.mouthOpen) ud.mouthOpen.visible = true;
           }
         }
       }
 
-      // ---- 郝哥动作：中刀转身面朝镜头、双手紧捂胸腹踉跄 → 单膝跪地痛苦捂腹 ----
-      if (T >= 0.45 && T < 1.55) {
+      // ---- 郝哥动作：中刀转身双手捂腹踉跄 → 被小弟抱住后仰捂腹 ----
+      if (T >= 0.45 && T < 1.95) {
         var ft = Math.min(1, (T - 0.45) / 0.55);
         haoGe.rotation.y = Math.PI * (1 - Math.min(1, ft * 1.25));
-        haoGe.rotation.x = 0.12 * easeIn(ft);
+        haoGe.rotation.x = 0.10 * easeIn(ft);
         haoGe.position.y = 0;
         if (up) {
-          if (up.spine) up.spine.rotation.x = 0.24 * ft;
+          if (up.spine) up.spine.rotation.x = 0.22 * ft;
           if (up.leftArm) { up.leftArm.rotation.x = -0.82 * ft; up.leftArm.rotation.z = -0.88; }
           if (up.leftForeArm) up.leftForeArm.rotation.x = -1.15 * ft;
           if (up.rightArm) { up.rightArm.rotation.x = -0.82 * ft; up.rightArm.rotation.z = 0.88; }
@@ -3483,28 +3614,28 @@
           if (up.leftLeg) up.leftLeg.rotation.x = -0.18 * ft;
           if (up.leftKnee) up.leftKnee.rotation.x = 0.25 * ft;
           if (up.rightLeg) up.rightLeg.rotation.x = 0.14 * ft;
-          if (up.head) up.head.rotation.x = 0.22 * ft;
+          if (up.head) up.head.rotation.x = 0.20 * ft;
         }
-      } else if (T >= 1.55) {
-        var kt = easeOut(Math.min(1, (T - 1.55) / 0.65));
+      } else if (T >= 1.95) {
+        var ht = easeOut(Math.min(1, (T - 1.95) / 0.50));
         haoGe.rotation.y = 0;
-        haoGe.rotation.x = 0.12 + 0.14 * kt;
-        haoGe.position.y = -0.42 * kt;
+        haoGe.rotation.x = 0.10 - 0.28 * ht;
+        haoGe.position.y = -0.10 * ht;
         if (up) {
-          if (up.spine) up.spine.rotation.x = 0.24 + 0.16 * kt;
+          if (up.spine) up.spine.rotation.x = 0.22 - 0.14 * ht;
           if (up.leftArm) { up.leftArm.rotation.x = -0.92; up.leftArm.rotation.z = -0.92; }
           if (up.leftForeArm) up.leftForeArm.rotation.x = -1.25;
           if (up.rightArm) { up.rightArm.rotation.x = -0.92; up.rightArm.rotation.z = 0.92; }
           if (up.rightForeArm) up.rightForeArm.rotation.x = -1.25;
-          if (up.leftLeg) up.leftLeg.rotation.x = -0.18 - 0.85 * kt;
-          if (up.leftKnee) up.leftKnee.rotation.x = 0.25 + 1.25 * kt;
-          if (up.rightLeg) up.rightLeg.rotation.x = 0.14 + 0.45 * kt;
-          if (up.rightKnee) up.rightKnee.rotation.x = 1.20 * kt;
-          if (up.head) up.head.rotation.x = 0.22 + 0.14 * kt;
+          if (up.leftLeg) up.leftLeg.rotation.x = -0.18 - 0.18 * ht;
+          if (up.leftKnee) up.leftKnee.rotation.x = 0.25 + 0.35 * ht;
+          if (up.rightLeg) up.rightLeg.rotation.x = 0.14;
+          if (up.rightKnee) up.rightKnee.rotation.x = 0.25 * ht;
+          if (up.head) up.head.rotation.x = 0.20 + 0.12 * ht;
         }
       }
 
-      // ---- 刀落红环 + 十字闪光 + 原剧三段经典语音（惨叫 → 萨日朗 → 结尾原声）----
+      // ---- 刀落红环 + 十字闪光 + 原剧经典语音节拍 ----
       if (T >= 0.48 && !S.campaignCatchBlood) {
         S.campaignCatchBlood = true;
         bloodRingT = 0.85;
@@ -3534,12 +3665,12 @@
         S.campaignCatchScream = true;
         window.AppAudio.playVoice('scream');
       }
-      if (T >= 1.35 && !S.campaignCatchSarilang) {
+      if (T >= 2.05 && !S.campaignCatchSarilang) {
         S.campaignCatchSarilang = true;
-        showBubble('萨日朗！这瓜保熟吗……', false);
+        showBubble('小弟：郝哥！萨日朗！', false);
         window.AppAudio.playVoice('sarilang');
       }
-      if (T >= 4.05 && !S.campaignCatchEnding) {
+      if (T >= 6.05 && !S.campaignCatchEnding) {
         S.campaignCatchEnding = true;
         window.AppAudio.playVoice('ending');
       }
@@ -3908,6 +4039,7 @@
       show('skipBtn');
       show('skipHint');
     } else {
+      hide('hud');
       hide('skipBtn');
       hide('skipHint');
     }
@@ -4133,6 +4265,7 @@
     if (T >= CONFIG.deathTime && !S.deathOverShown) {
       S.deathOverShown = true;
       try { localStorage.setItem('haoge_death_seen', '1'); } catch (e) {}
+      hide('hud');
       hide('skipBtn');
       hide('skipHint');
       show('overScreen');
@@ -4472,22 +4605,47 @@
       return;
     }
     if (S.campaignCatchT > 0) {
-      var catchElapsed = (S.campaignCatchMax || 6.2) - S.campaignCatchT;
-      var stageA = catchElapsed < 1.55;
-      var stageC = catchElapsed >= 2.65;
-      var fxCam = Math.min(3.55, Math.max(2.65, player.position.x + 2.85));
-      var fzCam = player.position.z + 4.2;
-      var goalX = stageC ? (fxCam - 2.1) : (player.position.x * 0.55 + (stageA ? 0.85 : 0.45));
-      var goalY = stageC ? 2.45 : (stageA ? 2.65 : 3.25);
-      var goalZ = stageC ? (fzCam + 4.35) : (stageA ? 5.35 : 7.45);
-      camera.position.x += (goalX - camera.position.x) * Math.min(1, dt * 4.5);
-      camera.position.y += (goalY - camera.position.y) * Math.min(1, dt * 4.2);
-      camera.position.z += (goalZ - camera.position.z) * Math.min(1, dt * 4.2);
-      var cLookX = stageC ? (fxCam - 0.55) : (player.position.x * 0.5 + (stageA ? 0.05 : 0.42));
-      var cLookY = stageC ? 1.25 : (stageA ? 1.15 : 1.25);
-      var cLookZ = stageC ? (fzCam - 0.15) : (player.position.z + (stageA ? 0.35 : 0.95));
+      var catchElapsed = (S.campaignCatchMax || 7.8) - S.campaignCatchT;
+      var fxCam = Math.min(3.95, Math.max(3.15, player.position.x + 3.25));
+      var fzCam = player.position.z + 5.6;
+      var goalX, goalY, goalZ, cLookX, cLookY, cLookZ, snap = false;
+      if (catchElapsed < 0.90) {
+        // 镜头 1: 近景暴起捅刀
+        goalX = player.position.x * 0.55 + 0.85; goalY = 2.45; goalZ = 4.95;
+        cLookX = player.position.x; cLookY = 1.25; cLookZ = player.position.z + 0.35;
+      } else if (catchElapsed < 1.85) {
+        // 镜头 2: 侧近景看华强持染血尖刀威慑小弟
+        goalX = player.position.x - 1.45; goalY = 1.85; goalZ = player.position.z + 3.55;
+        cLookX = player.position.x + 0.1; cLookY = 1.42; cLookZ = player.position.z + 0.25;
+      } else if (catchElapsed < 3.15) {
+        // 镜头 3: 小弟环抱郝哥大喊「萨日朗！」+ 右侧华强走向摩托
+        goalX = player.position.x + 0.35; goalY = 2.15; goalZ = player.position.z + 4.55;
+        cLookX = player.position.x + 0.25; cLookY = 1.32; cLookZ = player.position.z + 0.10;
+      } else if (catchElapsed < 4.85) {
+        // 镜头 4: 原剧经典低机位车尾右侧跟拍「冀A·E7168」冒蓝烟加速驶离
+        goalX = scooter.position.x + 1.35; goalY = 1.42; goalZ = scooter.position.z - 3.35;
+        cLookX = scooter.position.x; cLookY = 1.22; cLookZ = scooter.position.z + 0.65;
+        if (catchElapsed < 3.28) snap = true;
+      } else if (catchElapsed < 6.15) {
+        // 镜头 5: 路边写实一家三口挥手喊「华强！哎，华强！」+ 华强从旁掠过
+        goalX = fxCam - 1.85; goalY = 2.05; goalZ = fzCam + 4.10;
+        cLookX = fxCam - 0.35; cLookY = 1.55; cLookZ = fzCam - 0.10;
+        if (catchElapsed < 4.98) snap = true;
+      } else {
+        // 镜头 6: 原剧封神定格——华强左后肩侧脸特写（带出黑色后视镜）回头邪魅一笑
+        goalX = chaser.position.x + 1.08; goalY = 2.12; goalZ = chaser.position.z - 1.05;
+        cLookX = chaser.position.x - 0.08; cLookY = 2.02; cLookZ = chaser.position.z + 0.38;
+        snap = true;
+      }
+      if (snap) {
+        camera.position.set(goalX, goalY, goalZ);
+      } else {
+        camera.position.x += (goalX - camera.position.x) * Math.min(1, dt * 5.2);
+        camera.position.y += (goalY - camera.position.y) * Math.min(1, dt * 5.0);
+        camera.position.z += (goalZ - camera.position.z) * Math.min(1, dt * 5.0);
+      }
       camera.lookAt(cLookX, cLookY, cLookZ);
-      el.vignette.style.opacity = Math.min(0.62, (stageC ? 0.22 : 0.32) + Math.min(1, catchElapsed * 1.4) * 0.18 + S.flash).toFixed(3);
+      el.vignette.style.opacity = Math.min(0.62, (catchElapsed >= 4.85 ? 0.22 : 0.32) + S.flash).toFixed(3);
       S.flash = Math.max(0, S.flash - dt * 0.8);
       return;
     }
@@ -4630,7 +4788,7 @@
       nextChapter();
       return;
     }
-    if (S.campaignCatchT > 0 && ((S.campaignCatchMax || 6.2) - S.campaignCatchT) >= 3.0 && (k === 'Enter' || k === ' ')) {
+    if (S.campaignCatchT > 0 && ((S.campaignCatchMax || 7.8) - S.campaignCatchT) >= 3.0 && (k === 'Enter' || k === ' ')) {
       e.preventDefault();
       skipEnding();
       return;

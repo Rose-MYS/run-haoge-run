@@ -829,8 +829,87 @@ window.RunnerModels = (function () {
     knife.position.set(-0.01 * inv, 0.035 * inv, -0.025 * inv);
     knife.rotation.set(Math.PI + 0.18, 0, -0.22);
     hand.add(knife);
+    body.knifeGroup = knife;
+    body.setKnifeVisible = function (visible) { knife.visible = !!visible; };
     body.knifeBlade = knife.userData.blade;
     body.knifeEdge = knife.userData.edge;
+
+    // 按原剧视频（00:35 / 00:45 / 01:07 / 02:11）为华强左门襟挂接黑白斜纹字母织带饰条，并优化黑衣丝光质感
+    var hqChest = model.getObjectByName('Spine01') || model.getObjectByName('Spine02');
+    if (hqChest) {
+      var ribbonCanvas = document.createElement('canvas');
+      ribbonCanvas.width = 64;
+      ribbonCanvas.height = 256;
+      var rctx = ribbonCanvas.getContext('2d');
+      rctx.fillStyle = '#14161a';
+      rctx.fillRect(0, 0, 64, 256);
+      rctx.fillStyle = '#e8ecf0';
+      rctx.fillRect(8, 0, 48, 256);
+      rctx.fillStyle = '#14161a';
+      rctx.font = 'bold 26px "Arial Black", sans-serif';
+      rctx.textAlign = 'center';
+      rctx.textBaseline = 'middle';
+      ['H', 'Q', 'X', '9', '8', 'C', 'N'].forEach(function (ch, idx) {
+        rctx.save();
+        rctx.translate(32, 22 + idx * 34);
+        rctx.rotate(-0.22);
+        rctx.fillText(ch, 0, 0);
+        rctx.restore();
+      });
+      var ribbonTex = new THREE.CanvasTexture(ribbonCanvas);
+      ribbonTex.encoding = THREE.sRGBEncoding;
+      var ribbonMesh = new THREE.Mesh(
+        new THREE.BoxGeometry(0.032 * inv, 0.28 * inv, 0.012 * inv),
+        new THREE.MeshStandardMaterial({ map: ribbonTex, roughness: 0.55, metalness: 0.05 })
+      );
+      ribbonMesh.position.set(0.068 * inv, 0.08 * inv, 0.125 * inv);
+      ribbonMesh.rotation.z = 0.08;
+      hqChest.add(ribbonMesh);
+    }
+
+    // 自然人类骑摩托姿势（精确匹配左右手握把、双肘微弯、双膝前屈踏板、起步左脚点地及回头看）
+    body.applyScooterRidePose = function (opts) {
+      var o = opts || {};
+      var k = o.mount === undefined ? 1 : Math.max(0, Math.min(1, o.mount));
+      var footDown = o.leftFootDown || 0;
+      var headYaw = o.headYaw || 0;
+      var headPitch = o.headPitch || 0;
+      body.clearRigPose();
+      if (body.spine) body.spine.rotation.x = 0.14 * k;
+      if (body.chest) body.chest.rotation.x = 0.10 * k;
+      if (body.head) {
+        body.head.rotation.y = headYaw;
+        body.head.rotation.x = -0.10 * k + headPitch;
+      }
+      // LeftArm (+X): y = -1.18 向前(+Z)伸至左握把，z = +0.34 抵消部分下垂使小臂微斜向下
+      if (body.leftArm) {
+        body.leftArm.rotation.set(-0.08 * k, -1.18 * k, 0.34 * k);
+      }
+      if (body.leftForeArm) {
+        body.leftForeArm.rotation.set(0, -0.32 * k, 0);
+      }
+      // RightArm (-X): y = +1.18 向前(+Z)伸至右油门握把，z = -0.34 镜像微斜向下
+      if (body.rightArm) {
+        body.rightArm.rotation.set(-0.08 * k, 1.18 * k, -0.34 * k);
+      }
+      if (body.rightForeArm) {
+        body.rightForeArm.rotation.set(0, 0.32 * k, 0);
+      }
+      // 双腿前屈坐姿（起步时左脚可自然外伸点地蹬车）
+      if (body.leftLeg) {
+        body.leftLeg.rotation.set((0.88 - 0.42 * footDown) * k, 0.10 * k, 0.26 * footDown * k);
+      }
+      if (body.leftKnee) {
+        body.leftKnee.rotation.set((1.05 - 0.58 * footDown) * k, 0, 0);
+      }
+      if (body.rightLeg) {
+        body.rightLeg.rotation.set(0.88 * k, -0.10 * k, 0);
+      }
+      if (body.rightKnee) {
+        body.rightKnee.rotation.set(1.05 * k, 0, 0);
+      }
+    };
+
     body.faceKind = 'huaqiang';
     body.faceMorphs = skin.morphTargetInfluences;
     body.clearRigPose = function () {
@@ -1003,12 +1082,12 @@ window.RunnerModels = (function () {
 
   function applyHaogeMaterials(model) {
     var hints = [
-      { re: /hair|brow/i, color: 0x171310, roughness: 0.8, metalness: 0 },
-      { re: /skin|face|head|neck|ear/i, color: 0x8a4a2f, roughness: 0.55, metalness: 0 },
-      { re: /jacket|coat|suit|outer|shoulder|upper/i, color: 0x2a2d33, roughness: 0.65, metalness: 0.05 },
-      { re: /shirt|tee|inner|torso|vest/i, color: 0x5c6b4a, roughness: 0.8, metalness: 0 },
-      { re: /pants|leg|trous|jean/i, color: 0x22252a, roughness: 0.8, metalness: 0 },
-      { re: /shoe|boot|foot|sneaker/i, color: 0x2b2e33, roughness: 0.7, metalness: 0 },
+      { re: /hair|brow/i, color: 0x171310, roughness: 0.82, metalness: 0 },
+      { re: /skin|face|head|neck|ear/i, color: 0xc99674, roughness: 0.58, metalness: 0 },
+      { re: /jacket|coat|suit|outer|shoulder|upper/i, color: 0x252930, roughness: 0.58, metalness: 0.08 },
+      { re: /shirt|tee|inner|torso|vest/i, color: 0x566646, roughness: 0.80, metalness: 0 },
+      { re: /pants|leg|trous|jean/i, color: 0x202329, roughness: 0.80, metalness: 0 },
+      { re: /shoe|boot|foot|sneaker/i, color: 0x1e2025, roughness: 0.62, metalness: 0.06 },
     ];
     model.traverse(function (o) {
       if (!o.isMesh || !o.name) return;
@@ -1034,6 +1113,71 @@ window.RunnerModels = (function () {
         else o.material = tinted;
       }
     });
+
+    // 按原剧视频（01:32 / 01:39 / 02:12）挂接郝哥标志性细节：
+    // 1. 左手腕宽链节金色大金表
+    var leftHand = findBone(model, boneNamesAny('LeftHand')) || findBone(model, boneNamesAny('LeftForeArm'));
+    if (leftHand && !leftHand.userData.haogeWatchAdded) {
+      leftHand.userData.haogeWatchAdded = true;
+      var invS = model.scale && model.scale.x ? (1 / model.scale.x) : 1;
+      var goldMat = std(0xefc24a, { roughness: 0.22, metalness: 0.90 });
+      var dialMat = std(0xf9f0c8, { roughness: 0.30, metalness: 0.45 });
+      var watchG = new THREE.Group();
+      var band = new THREE.Mesh(new THREE.TorusGeometry(0.044 * invS, 0.013 * invS, 8, 16), goldMat);
+      band.rotation.x = Math.PI / 2;
+      var bezel = new THREE.Mesh(new THREE.CylinderGeometry(0.025 * invS, 0.025 * invS, 0.012 * invS, 12), goldMat);
+      bezel.position.set(0, 0, 0.045 * invS);
+      bezel.rotation.x = Math.PI / 2;
+      var dial = new THREE.Mesh(new THREE.CylinderGeometry(0.019 * invS, 0.019 * invS, 0.014 * invS, 12), dialMat);
+      dial.position.set(0, 0, 0.046 * invS);
+      dial.rotation.x = Math.PI / 2;
+      watchG.add(band, bezel, dial);
+      watchG.position.set(0, -0.03 * invS, 0);
+      leftHand.add(watchG);
+    }
+
+    // 2. 敞开夹克白滚边 + 军绿内搭 T 恤胸前红黄黑彩色图腾印花
+    var chestBone = findBone(model, boneNamesAny('Spine01').concat(boneNamesAny('Spine1')).concat(boneNamesAny('Spine')));
+    if (chestBone && !chestBone.userData.haogeTeeAdded) {
+      chestBone.userData.haogeTeeAdded = true;
+      var invC = model.scale && model.scale.x ? (1 / model.scale.x) : 1;
+      var teeCanvas = document.createElement('canvas');
+      teeCanvas.width = 160;
+      teeCanvas.height = 192;
+      var tctx = teeCanvas.getContext('2d');
+      // 军绿底色 + 夹克两侧白滚边
+      tctx.fillStyle = '#556544';
+      tctx.fillRect(0, 0, 160, 192);
+      tctx.fillStyle = '#242830';
+      tctx.fillRect(0, 0, 22, 192);
+      tctx.fillRect(138, 0, 22, 192);
+      tctx.fillStyle = '#edf1f5';
+      tctx.fillRect(22, 0, 6, 192);
+      tctx.fillRect(132, 0, 6, 192);
+      // 胸前原剧标志性红/黄/黑醒目卡通图腾印花
+      tctx.fillStyle = '#e5b828';
+      tctx.beginPath();
+      tctx.arc(80, 86, 38, 0, Math.PI * 2);
+      tctx.fill();
+      tctx.fillStyle = '#c8261e';
+      tctx.beginPath();
+      tctx.arc(80, 92, 26, 0, Math.PI * 2);
+      tctx.fill();
+      tctx.fillStyle = '#181818';
+      tctx.fillRect(62, 76, 12, 8);
+      tctx.fillRect(86, 76, 12, 8);
+      tctx.fillRect(68, 98, 24, 9);
+      tctx.fillStyle = '#f6df58';
+      tctx.fillRect(48, 134, 64, 14);
+      var teeTex = new THREE.CanvasTexture(teeCanvas);
+      teeTex.encoding = THREE.sRGBEncoding;
+      var teePatch = new THREE.Mesh(
+        new THREE.PlaneGeometry(0.24 * invC, 0.28 * invC),
+        new THREE.MeshStandardMaterial({ map: teeTex, roughness: 0.78 })
+      );
+      teePatch.position.set(0, 0.04 * invC, 0.145 * invC);
+      chestBone.add(teePatch);
+    }
   }
 
   function loadGltf(kind, cb, fail) {

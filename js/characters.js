@@ -796,12 +796,6 @@ window.Runners = (function () {
     blade.material = on ? blade.userData.bloodMat : blade.userData.origMat;
   }
 
-  function createXiaoDi() {
-    var r = makeRunner({ face: 'haoge', hair: 'flat', shirt: true });
-    r.scale.set(0.98, 0.98, 0.98);
-    return r;
-  }
-
   function createIronHammer() {
     var g = new THREE.Group();
     var handle = mesh(new THREE.CylinderGeometry(0.035, 0.045, 0.62, 10), M.metalDark);
@@ -819,278 +813,689 @@ window.Runners = (function () {
     return g;
   }
 
-  function makeMirror(side) {
-    var m = new THREE.Group();
-    var stalk = mesh(new THREE.CylinderGeometry(0.015, 0.015, 0.26, 8), M.metalDark);
-    stalk.position.set(side * 0.13, 0.13, 0);
-    stalk.rotation.z = side * 0.9;
-    m.add(stalk);
-    var glass = sphere(0.045, M.metalDark, 8);
-    glass.scale.set(1, 0.35, 0.5);
-    glass.position.set(side * 0.21, 0.26, 0.03);
-    m.add(glass);
-    return m;
+  function makePlateTexture(lines) {
+    var c = document.createElement('canvas');
+    c.width = 256;
+    c.height = lines.length > 1 ? 144 : 84;
+    var ctx = c.getContext('2d');
+    ctx.fillStyle = '#e8b62c';
+    ctx.fillRect(0, 0, c.width, c.height);
+    ctx.strokeStyle = '#181818';
+    ctx.lineWidth = 8;
+    ctx.strokeRect(6, 6, c.width - 12, c.height - 12);
+    ctx.fillStyle = '#141414';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    if (lines.length > 1) {
+      ctx.font = 'bold 46px "Microsoft YaHei", sans-serif';
+      ctx.fillText(lines[0], c.width / 2, 46);
+      ctx.font = 'bold 54px "Consolas", "Arial Black", sans-serif';
+      ctx.fillText(lines[1], c.width / 2, 102);
+    } else {
+      ctx.font = 'bold 44px "Microsoft YaHei", "Arial Black", sans-serif';
+      ctx.fillText(lines[0], c.width / 2, c.height / 2 + 2);
+    }
+    var tex = new THREE.CanvasTexture(c);
+    tex.encoding = THREE.sRGBEncoding;
+    return tex;
   }
 
+  function makeDashTexture() {
+    var c = document.createElement('canvas');
+    c.width = 256;
+    c.height = 128;
+    var ctx = c.getContext('2d');
+    ctx.fillStyle = '#12151a';
+    ctx.fillRect(0, 0, 256, 128);
+    // 速度表 + 油量表
+    [82, 178].forEach(function (cx, idx) {
+      var r = idx === 0 ? 48 : 34;
+      ctx.beginPath();
+      ctx.arc(cx, 66, r, 0, Math.PI * 2);
+      ctx.fillStyle = '#1d242c';
+      ctx.fill();
+      ctx.lineWidth = 4;
+      ctx.strokeStyle = '#73818e';
+      ctx.stroke();
+      ctx.strokeStyle = '#d9e3ec';
+      ctx.lineWidth = 2;
+      for (var k = 0; k < 9; k++) {
+        var a = Math.PI * 0.78 + (k / 8) * Math.PI * 1.44;
+        ctx.beginPath();
+        ctx.moveTo(cx + Math.cos(a) * (r - 10), 66 + Math.sin(a) * (r - 10));
+        ctx.lineTo(cx + Math.cos(a) * (r - 4), 66 + Math.sin(a) * (r - 4));
+        ctx.stroke();
+      }
+      ctx.strokeStyle = '#e04838';
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(cx, 66);
+      ctx.lineTo(cx + (idx === 0 ? 18 : 12), 66 - (idx === 0 ? 22 : 16));
+      ctx.stroke();
+    });
+    var tex = new THREE.CanvasTexture(c);
+    tex.encoding = THREE.sRGBEncoding;
+    return tex;
+  }
+
+  function makeRealisticFaceTexture(opts) {
+    var c = document.createElement('canvas');
+    c.width = 256;
+    c.height = 256;
+    var ctx = c.getContext('2d');
+    ctx.fillStyle = opts.skin || '#deb392';
+    ctx.fillRect(0, 0, 256, 256);
+    // 柔和脸颊阴影与暖红晕
+    var cheek = ctx.createRadialGradient(84, 152, 4, 84, 152, 34);
+    cheek.addColorStop(0, opts.blush || 'rgba(204,116,96,0.22)');
+    cheek.addColorStop(1, 'rgba(204,116,96,0)');
+    ctx.fillStyle = cheek;
+    ctx.fillRect(40, 110, 90, 80);
+    var cheek2 = ctx.createRadialGradient(172, 152, 4, 172, 152, 34);
+    cheek2.addColorStop(0, opts.blush || 'rgba(204,116,96,0.22)');
+    cheek2.addColorStop(1, 'rgba(204,116,96,0)');
+    ctx.fillStyle = cheek2;
+    ctx.fillRect(126, 110, 90, 80);
+    // 眉毛
+    ctx.strokeStyle = opts.browColor || '#1e1a18';
+    ctx.lineWidth = opts.child ? 4.5 : (opts.female ? 4.5 : 6.5);
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(74, 102); ctx.quadraticCurveTo(95, 95, 112, 101);
+    ctx.moveTo(144, 101); ctx.quadraticCurveTo(161, 95, 182, 102);
+    ctx.stroke();
+    // 双眼（写实杏眼 + 瞳仁 + 高光）
+    [94, 162].forEach(function (ex) {
+      ctx.fillStyle = '#f8f5f0';
+      ctx.beginPath();
+      ctx.ellipse(ex, 122, opts.child ? 13 : 12, opts.child ? 8.5 : 7, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#251a14';
+      ctx.beginPath();
+      ctx.arc(ex, 122, opts.child ? 6.2 : 5.5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.arc(ex - 2.2, 119.5, 2.0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = '#261e1a';
+      ctx.lineWidth = 2.6;
+      ctx.beginPath();
+      ctx.ellipse(ex, 121.5, opts.child ? 13 : 12, opts.child ? 8.5 : 7, 0, Math.PI * 1.05, Math.PI * 1.95);
+      ctx.stroke();
+    });
+    // 鼻影
+    ctx.strokeStyle = 'rgba(128,84,58,0.42)';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(128, 124);
+    ctx.lineTo(125, 148);
+    ctx.quadraticCurveTo(128, 152, 134, 148);
+    ctx.stroke();
+    // 嘴部（闭嘴 / 张嘴呼喊）
+    if (opts.openMouth) {
+      ctx.fillStyle = '#5e1e1e';
+      ctx.beginPath();
+      ctx.ellipse(128, 178, 16, 12, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#f4ece4';
+      ctx.fillRect(117, 170, 22, 5);
+      ctx.strokeStyle = '#9c5244';
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      ctx.ellipse(128, 178, 16, 12, 0, 0, Math.PI * 2);
+      ctx.stroke();
+    } else {
+      ctx.strokeStyle = opts.lipColor || '#a85b4c';
+      ctx.lineWidth = opts.female ? 4.2 : 3.6;
+      ctx.beginPath();
+      ctx.moveTo(112, 176);
+      ctx.quadraticCurveTo(128, opts.smile ? 183 : 178, 144, 176);
+      ctx.stroke();
+    }
+    var tex = new THREE.CanvasTexture(c);
+    tex.encoding = THREE.sRGBEncoding;
+    return tex;
+  }
+
+  function makeStripedSweaterTexture() {
+    var c = document.createElement('canvas');
+    c.width = 128;
+    c.height = 128;
+    var ctx = c.getContext('2d');
+    ctx.fillStyle = '#d6e3ee';
+    ctx.fillRect(0, 0, 128, 128);
+    ctx.fillStyle = '#6c98bf';
+    for (var y = 0; y < 128; y += 16) {
+      ctx.fillRect(0, y, 128, 7);
+    }
+    var tex = new THREE.CanvasTexture(c);
+    tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+    tex.encoding = THREE.sRGBEncoding;
+    return tex;
+  }
+
+  // ── 90 年代经典深炭黑踏板摩托「冀A·E7168」（对照原剧 00:26-00:34 & 02:18-02:23 重建）──
   function createElectricScooter() {
     var g = new THREE.Group();
+    var bodyPaint = std(0x252930, { roughness: 0.30, metalness: 0.36 });
+    var darkTrim = std(0x16181c, { roughness: 0.78, metalness: 0.08 });
+    var seatLeather = std(0x1b1d20, { roughness: 0.62, metalness: 0.06 });
+    var chromeMat = std(0xc8d0d8, { roughness: 0.22, metalness: 0.86 });
+    var tireMat = std(0x181a1d, { roughness: 0.90, metalness: 0.04 });
+    var rimMat = std(0xb4bcc4, { roughness: 0.32, metalness: 0.72 });
+    var glassMat = new THREE.MeshStandardMaterial({ color: 0xfff8e2, emissive: 0xffe49c, emissiveIntensity: 0.45, roughness: 0.15, metalness: 0.1 });
+    var amberMat = new THREE.MeshStandardMaterial({ color: 0xe6841c, emissive: 0xb85808, emissiveIntensity: 0.3, roughness: 0.28 });
+    var tailRedMat = new THREE.MeshStandardMaterial({ color: 0xc8221e, emissive: 0x7a0c0a, emissiveIntensity: 0.45, roughness: 0.25 });
+    var mirrorGlassMat = std(0xa8bcc8, { roughness: 0.1, metalness: 0.92 });
 
-    var deck = roundBox(0.65, 0.12, 1.95, { mat: M.frame, r: 0.05 });
-    deck.position.y = 0.35;
-    g.add(deck);
+    // 底盘与防滑脚踏平台
+    var floorDeck = roundBox(0.46, 0.09, 0.72, { mat: darkTrim, r: 0.025 });
+    floorDeck.position.set(0, 0.27, 0.04);
+    g.add(floorDeck);
+    for (var ri = -2; ri <= 2; ri++) {
+      var rib = mesh(new THREE.BoxGeometry(0.025, 0.014, 0.54), std(0x2a2d32, { roughness: 0.85 }));
+      rib.position.set(ri * 0.075, 0.32, 0.04);
+      g.add(rib);
+    }
+    var lowerBelly = roundBox(0.42, 0.14, 1.18, { mat: darkTrim, r: 0.04 });
+    lowerBelly.position.set(0, 0.21, -0.10);
+    g.add(lowerBelly);
 
-    var batt = roundBox(0.39, 0.22, 0.81, { mat: M.metalDark, r: 0.065 });
-    batt.position.set(0, 0.47, -0.18);
-    g.add(batt);
+    // 流线弧形前挡风鼻罩（原剧标志性宽弧形黑色车头）
+    var frontFairing = roundBox(0.50, 0.62, 0.24, { mat: bodyPaint, r: 0.09 });
+    frontFairing.position.set(0, 0.68, 0.56);
+    frontFairing.rotation.x = -0.24;
+    g.add(frontFairing);
 
-    var stem = mesh(new THREE.CylinderGeometry(0.042, 0.055, 1.3, 10), M.frame);
-    stem.position.set(0, 0.99, 0.72);
-    stem.rotation.x = 0.16;
-    g.add(stem);
+    var noseSlope = mesh(new THREE.CylinderGeometry(0.20, 0.27, 0.54, 16), bodyPaint);
+    noseSlope.scale.set(1.05, 1.0, 0.62);
+    noseSlope.position.set(0, 0.65, 0.63);
+    noseSlope.rotation.x = -0.32;
+    g.add(noseSlope);
 
-    var head = roundBox(0.2, 0.17, 0.2, { mat: M.frame, r: 0.04 });
-    head.position.set(0, 1.51, 0.72);
-    g.add(head);
+    // 内侧护膝挡板
+    var innerLegShield = roundBox(0.46, 0.56, 0.09, { mat: darkTrim, r: 0.03 });
+    innerLegShield.position.set(0, 0.62, 0.42);
+    innerLegShield.rotation.x = -0.18;
+    g.add(innerLegShield);
 
-    var bar = mesh(new THREE.CylinderGeometry(0.026, 0.026, 0.81, 10), M.metal);
-    bar.rotation.z = Math.PI / 2;
-    bar.position.set(0, 1.61, 0.72);
-    g.add(bar);
+    // 前部椭圆大灯 + 左右橙色转向灯 + 前牌照「冀A·E7168」
+    var headlamp = mesh(new THREE.SphereGeometry(0.115, 14, 10), glassMat);
+    headlamp.scale.set(1.35, 0.72, 0.48);
+    headlamp.position.set(0, 0.84, 0.72);
+    g.add(headlamp);
+    [-0.18, 0.18].forEach(function (sx) {
+      var blinker = mesh(new THREE.SphereGeometry(0.048, 10, 8), amberMat);
+      blinker.scale.set(1.25, 0.75, 0.55);
+      blinker.position.set(sx, 0.82, 0.70);
+      g.add(blinker);
+    });
+    var frontPlate = new THREE.Mesh(
+      new THREE.PlaneGeometry(0.24, 0.08),
+      new THREE.MeshBasicMaterial({ map: makePlateTexture(['冀A·E7168']) })
+    );
+    frontPlate.position.set(0, 0.64, 0.765);
+    frontPlate.rotation.x = -0.28;
+    g.add(frontPlate);
 
-    var gripL = mesh(new THREE.CylinderGeometry(0.036, 0.036, 0.17, 10), M.shoe);
-    gripL.rotation.z = Math.PI / 2;
-    gripL.position.set(-0.38, 1.61, 0.72);
-    g.add(gripL);
-    var gripR = gripL.clone();
-    gripR.position.x = 0.38;
-    g.add(gripR);
+    // 车头转向罩 + 仪表台 + 橡胶握把 + 刹把 + 双后视镜
+    var headCowl = roundBox(0.38, 0.16, 0.24, { mat: bodyPaint, r: 0.06 });
+    headCowl.position.set(0, 1.05, 0.49);
+    headCowl.rotation.x = -0.16;
+    g.add(headCowl);
 
-    var leverL = mesh(new THREE.CylinderGeometry(0.01, 0.01, 0.16, 6), M.metalDark);
-    leverL.rotation.z = -0.4;
-    leverL.position.set(-0.4, 1.51, 0.73);
-    g.add(leverL);
-    var leverR = leverL.clone();
-    leverR.rotation.z = 0.4;
-    leverR.position.x = 0.4;
-    g.add(leverR);
+    var dashPanel = new THREE.Mesh(
+      new THREE.PlaneGeometry(0.22, 0.11),
+      new THREE.MeshBasicMaterial({ map: makeDashTexture() })
+    );
+    dashPanel.position.set(0, 1.09, 0.375);
+    dashPanel.rotation.x = -Math.PI * 0.28;
+    dashPanel.rotation.y = Math.PI;
+    g.add(dashPanel);
 
-    var disp = roundBox(0.21, 0.12, 0.05, { mat: M.metalDark, r: 0.012 });
-    disp.position.set(0, 1.52, 0.61);
-    g.add(disp);
-    var dispScreen = roundBox(0.16, 0.08, 0.016, { mat: new THREE.MeshBasicMaterial({ color: 0x9fd8ef }), r: 0.006 });
-    dispScreen.position.set(0, 1.52, 0.584);
-    g.add(dispScreen);
+    var handleBar = mesh(new THREE.CylinderGeometry(0.018, 0.018, 0.68, 10), chromeMat);
+    handleBar.rotation.z = Math.PI / 2;
+    handleBar.position.set(0, 1.04, 0.45);
+    g.add(handleBar);
 
-    var lamp = mesh(new THREE.CylinderGeometry(0.052, 0.065, 0.08, 10), M.metalDark);
-    lamp.rotation.x = Math.PI / 2;
-    lamp.position.set(0, 1.09, 0.88);
-    g.add(lamp);
-    var light = sphere(0.06, M.glow, 8);
-    light.position.set(0, 1.09, 0.92);
-    g.add(light);
+    [-1, 1].forEach(function (side) {
+      var grip = mesh(new THREE.CylinderGeometry(0.026, 0.026, 0.15, 12), darkTrim);
+      grip.rotation.z = Math.PI / 2;
+      grip.position.set(side * 0.34, 1.04, 0.44);
+      g.add(grip);
 
-    var mirrorL = makeMirror(-1);
-    mirrorL.position.set(-0.13, 1.72, 0.73);
-    g.add(mirrorL);
-    var mirrorR = makeMirror(1);
-    mirrorR.position.set(0.13, 1.72, 0.73);
-    g.add(mirrorR);
+      var lever = mesh(new THREE.BoxGeometry(0.13, 0.014, 0.022), chromeMat);
+      lever.position.set(side * 0.32, 1.02, 0.51);
+      lever.rotation.y = -side * 0.22;
+      g.add(lever);
+    });
 
-    var seatPost = mesh(new THREE.CylinderGeometry(0.039, 0.039, 0.59, 10), M.frame);
-    seatPost.position.set(0, 0.73, -0.23);
-    g.add(seatPost);
-    var seat = roundBox(0.39, 0.12, 0.62, { mat: M.shoe, r: 0.05 });
-    seat.position.set(0, 1.01, -0.23);
-    g.add(seat);
+    function buildMirror(side) {
+      var mg = new THREE.Group();
+      mg.position.set(side * 0.17, 1.11, 0.48);
+      var stalk = mesh(new THREE.CylinderGeometry(0.01, 0.01, 0.22, 8), darkTrim);
+      stalk.position.set(side * 0.06, 0.09, 0.01);
+      stalk.rotation.z = -side * 0.52;
+      mg.add(stalk);
+      var casing = roundBox(0.145, 0.088, 0.036, { mat: darkTrim, r: 0.016 });
+      casing.position.set(side * 0.15, 0.18, 0.02);
+      casing.rotation.y = side * 0.18;
+      mg.add(casing);
+      var glass = new THREE.Mesh(new THREE.PlaneGeometry(0.125, 0.070), mirrorGlassMat);
+      glass.position.set(side * 0.15, 0.18, 0.001);
+      glass.rotation.y = Math.PI + side * 0.18;
+      mg.add(glass);
+      return mg;
+    }
+    var mirrorLeft = buildMirror(-1);
+    var mirrorRight = buildMirror(1);
+    g.add(mirrorLeft, mirrorRight);
 
-    function makeWheel(z) {
+    // 饱满流线后车身护板 + 阶梯双人黑皮坐垫 + 镀铬后尾扶手
+    var rearBody = roundBox(0.48, 0.38, 0.92, { mat: bodyPaint, r: 0.11 });
+    rearBody.position.set(0, 0.56, -0.34);
+    g.add(rearBody);
+
+    var seatFront = roundBox(0.38, 0.13, 0.44, { mat: seatLeather, r: 0.055 });
+    seatFront.position.set(0, 0.77, -0.14);
+    g.add(seatFront);
+    var seatRear = roundBox(0.36, 0.14, 0.38, { mat: seatLeather, r: 0.055 });
+    seatRear.position.set(0, 0.83, -0.50);
+    g.add(seatRear);
+
+    var grabRail = mesh(new THREE.TorusGeometry(0.19, 0.018, 8, 16, Math.PI), chromeMat);
+    grabRail.rotation.x = Math.PI / 2;
+    grabRail.rotation.z = Math.PI;
+    grabRail.position.set(0, 0.86, -0.70);
+    g.add(grabRail);
+
+    // 尾灯 + 后转向灯 + 后泥瓦 + 原剧双行黄牌「冀A / E7168」
+    var tailLamp = roundBox(0.20, 0.095, 0.05, { mat: tailRedMat, r: 0.02 });
+    tailLamp.position.set(0, 0.68, -0.81);
+    g.add(tailLamp);
+    [-0.14, 0.14].forEach(function (sx) {
+      var rb = roundBox(0.065, 0.075, 0.045, { mat: amberMat, r: 0.015 });
+      rb.position.set(sx, 0.68, -0.80);
+      g.add(rb);
+    });
+    var rearFenderFlap = roundBox(0.24, 0.26, 0.03, { mat: darkTrim, r: 0.01 });
+    rearFenderFlap.position.set(0, 0.46, -0.84);
+    rearFenderFlap.rotation.x = 0.22;
+    g.add(rearFenderFlap);
+
+    var rearPlate = new THREE.Mesh(
+      new THREE.PlaneGeometry(0.24, 0.135),
+      new THREE.MeshBasicMaterial({ map: makePlateTexture(['冀 A', 'E7168']) })
+    );
+    rearPlate.position.set(0, 0.49, -0.865);
+    rearPlate.rotation.y = Math.PI;
+    rearPlate.rotation.x = -0.22;
+    g.add(rearPlate);
+
+    // 右侧黑色/镀铬斜置排气管 + 隔热罩 + 尾气挂点
+    var muffler = mesh(new THREE.CylinderGeometry(0.052, 0.060, 0.56, 12), darkTrim);
+    muffler.rotation.x = Math.PI / 2 + 0.18;
+    muffler.position.set(0.25, 0.34, -0.46);
+    g.add(muffler);
+    var heatShield = mesh(new THREE.CylinderGeometry(0.058, 0.064, 0.34, 10, 1, true, -0.8, 1.6), chromeMat);
+    heatShield.rotation.x = Math.PI / 2 + 0.18;
+    heatShield.rotation.z = -Math.PI / 2;
+    heatShield.position.set(0.26, 0.34, -0.46);
+    g.add(heatShield);
+    var exhaustTip = new THREE.Object3D();
+    exhaustTip.position.set(0.25, 0.39, -0.76);
+    g.add(exhaustTip);
+
+    // 前后宽胎面踏板轮胎 + 五辐银色轮毂 + 减震前叉
+    function makeScooterWheel(z) {
       var wg = new THREE.Group();
-      wg.position.set(0, 0.35, z);
-      var tire = mesh(new THREE.CylinderGeometry(0.35, 0.35, 0.09, 18), M.tire);
-      tire.rotation.z = Math.PI / 2;
+      wg.position.set(0, 0.26, z);
+      var tire = mesh(new THREE.TorusGeometry(0.19, 0.075, 12, 22), tireMat);
+      tire.rotation.y = Math.PI / 2;
       wg.add(tire);
-      var rim = mesh(new THREE.CylinderGeometry(0.2, 0.2, 0.1, 12), M.metal);
+      var rim = mesh(new THREE.CylinderGeometry(0.145, 0.145, 0.085, 14), rimMat);
       rim.rotation.z = Math.PI / 2;
       wg.add(rim);
-      var hub = mesh(new THREE.CylinderGeometry(0.065, 0.065, 0.1, 10), M.metal);
+      var hub = mesh(new THREE.CylinderGeometry(0.052, 0.052, 0.11, 10), darkTrim);
       hub.rotation.z = Math.PI / 2;
       wg.add(hub);
       for (var i = 0; i < 5; i++) {
-        var spoke = mesh(new THREE.BoxGeometry(0.024, 0.25, 0.024), M.metalDark);
+        var spoke = mesh(new THREE.BoxGeometry(0.09, 0.24, 0.022), rimMat);
         spoke.rotation.x = (i / 5) * Math.PI;
         wg.add(spoke);
       }
       return wg;
     }
+    var wheelFront = makeScooterWheel(0.64);
+    var wheelRear = makeScooterWheel(-0.56);
+    g.add(wheelFront, wheelRear);
 
-    var wheelFront = makeWheel(0.72);
-    var wheelRear = makeWheel(-0.72);
-    g.add(wheelFront);
-    g.add(wheelRear);
+    // 前挡泥板 + 前减震双叉
+    var frontFender = mesh(new THREE.TorusGeometry(0.27, 0.055, 8, 16, Math.PI * 0.72), bodyPaint);
+    frontFender.rotation.y = Math.PI / 2;
+    frontFender.rotation.z = 0.24;
+    frontFender.position.set(0, 0.28, 0.64);
+    g.add(frontFender);
 
-    function makeFender(z) {
-      var f = mesh(new THREE.TorusGeometry(0.35, 0.045, 8, 14, Math.PI), M.frame);
-      f.rotation.y = Math.PI / 2;
-      f.position.set(0, 0.35, z);
-      return f;
-    }
-    g.add(makeFender(0.72));
-    g.add(makeFender(-0.72));
+    [-0.10, 0.10].forEach(function (fx) {
+      var fork = mesh(new THREE.CylinderGeometry(0.022, 0.020, 0.44, 8), chromeMat);
+      fork.position.set(fx, 0.44, 0.60);
+      fork.rotation.x = -0.22;
+      g.add(fork);
+    });
 
-    g.userData = { wheels: [wheelFront, wheelRear] };
+    g.userData = {
+      wheels: [wheelFront, wheelRear],
+      seatPos: new THREE.Vector3(0, 0.78, -0.16),
+      handleLeft: new THREE.Vector3(-0.34, 1.04, 0.44),
+      handleRight: new THREE.Vector3(0.34, 1.04, 0.44),
+      exhaustTip: exhaustTip,
+      mirrorLeft: mirrorLeft,
+    };
     return g;
   }
 
-  function createFamilyMember(kind) {
+  // ── 写实人体比例角色构建器（用于路边一家三口 & 瓜摊小弟，彻底告别方块火柴人）──
+  function createRealisticPerson(cfg) {
     var g = new THREE.Group();
-    var child = kind === 'daughter';
+    var hScale = cfg.height / 1.74;
+    var skinMat = std(cfg.skinHex || 0xdcb290, { roughness: 0.62, metalness: 0.02 });
+    var jacketMat = std(cfg.jacketHex || 0x2b3340, { roughness: 0.62, metalness: 0.06 });
+    var pantsMat = std(cfg.pantsHex || 0x202328, { roughness: 0.78 });
+    var shoeMat = std(cfg.shoeHex || 0x18191c, { roughness: 0.48, metalness: 0.12 });
+    var hairMat = std(cfg.hairHex || 0x1a1715, { roughness: 0.85 });
+    var shirtMat = std(cfg.shirtHex || 0xe4eaf0, { roughness: 0.78 });
+    var sleeveMat = cfg.sleeveTex
+      ? new THREE.MeshStandardMaterial({ map: cfg.sleeveTex, roughness: 0.82 })
+      : jacketMat;
 
-    var suitFather = std(0x2a2d33, { roughness: 0.45, metalness: 0.12 });
-    var suitMother = std(0x26342f, { roughness: 0.5, metalness: 0.08 });
-    var shirtWhite = std(0xe8edf2, { roughness: 0.8 });
-    var tieDark = std(0x1d2430, { roughness: 0.65 });
-    var vestRed = std(0xa93333, { roughness: 0.85 });
-    var sleeveBlue = std(0x8fb6d9, { roughness: 0.8 });
-    var bagMat = std(0x1a1a1a, { roughness: 0.7 });
+    // 双腿（大腿 + 膝 + 小腿 + 写实鞋）
+    function makeLeg(x) {
+      var legG = new THREE.Group();
+      legG.position.set(x, 0.86, 0);
+      var thigh = mesh(new THREE.CylinderGeometry(0.088, 0.070, 0.42, 12), pantsMat);
+      thigh.position.y = -0.21;
+      legG.add(thigh);
+      var knee = new THREE.Group();
+      knee.position.y = -0.42;
+      var calf = mesh(new THREE.CylinderGeometry(0.068, 0.052, 0.38, 12), pantsMat);
+      calf.position.y = -0.19;
+      knee.add(calf);
+      var shoe = roundBox(0.105, 0.075, 0.24, { mat: shoeMat, r: 0.028 });
+      shoe.position.set(0, -0.40, 0.045);
+      knee.add(shoe);
+      legG.add(knee);
+      g.add(legG);
+      return legG;
+    }
+    var leftLeg = makeLeg(-0.105);
+    var rightLeg = makeLeg(0.105);
 
-    var torsoMat = kind === 'father' ? suitFather : kind === 'mother' ? suitMother : vestRed;
-    var sleeveMat = child ? sleeveBlue : torsoMat;
-    var hairMat = kind === 'father' ? M.hair : M.hairBrown;
+    // 写实上身躯干（自然肩宽 + 收腰 + 翻领 + 服装细节）
+    var torsoG = new THREE.Group();
+    torsoG.position.y = 0.86;
+    var pelvis = mesh(new THREE.CylinderGeometry(0.155, 0.148, 0.14, 14), pantsMat);
+    pelvis.scale.set(1.18, 1, 0.72);
+    pelvis.position.y = 0.05;
+    torsoG.add(pelvis);
 
-    function addLegs() {
-      [-0.16, 0.16].forEach(function (x) {
-        var leg = mesh(new THREE.CylinderGeometry(0.07, 0.055, 0.72, 8), M.pants);
-        leg.position.set(x, 0.36, 0);
-        g.add(leg);
-        var shoe = roundBox(0.2, 0.12, 0.34, { mat: M.shoe, r: 0.04 });
-        shoe.position.set(x, 0.06, 0.04);
-        g.add(shoe);
+    var upperTorso = mesh(new THREE.CylinderGeometry(cfg.shoulderW || 0.21, cfg.waistW || 0.155, 0.48, 16), jacketMat);
+    upperTorso.scale.set(1.08, 1, 0.64);
+    upperTorso.position.y = 0.34;
+    torsoG.add(upperTorso);
+
+    // 自然圆肩
+    [-1, 1].forEach(function (s) {
+      var sh = mesh(new THREE.SphereGeometry(0.082, 12, 10), jacketMat);
+      sh.position.set(s * (cfg.shoulderW || 0.21) * 0.96, 0.53, 0);
+      torsoG.add(sh);
+    });
+
+    // 衬衫 V 领与西装翻领 / 领带 / 夹棉背心 / 斜挎包
+    var shirtV = mesh(new THREE.CylinderGeometry(0.072, 0.032, 0.22, 10), shirtMat);
+    shirtV.scale.set(1, 1, 0.45);
+    shirtV.position.set(0, 0.48, 0.115);
+    torsoG.add(shirtV);
+
+    if (cfg.tieHex) {
+      var tieMat = std(cfg.tieHex, { roughness: 0.55 });
+      var tieKnot = mesh(new THREE.BoxGeometry(0.042, 0.04, 0.025), tieMat);
+      tieKnot.position.set(0, 0.54, 0.135);
+      var tieBody = mesh(new THREE.BoxGeometry(0.048, 0.24, 0.02), tieMat);
+      tieBody.position.set(0, 0.40, 0.138);
+      torsoG.add(tieKnot, tieBody);
+      // 西装双排扣翻领
+      [-1, 1].forEach(function (s) {
+        var lapel = roundBox(0.068, 0.24, 0.024, { mat: jacketMat, r: 0.008 });
+        lapel.position.set(s * 0.072, 0.46, 0.132);
+        lapel.rotation.z = s * 0.24;
+        torsoG.add(lapel);
       });
     }
-
-    function addTorso() {
-      var t = new THREE.Group();
-      t.position.y = 0.82;
-      var body = roundBox(0.66, 0.62, 0.4, { mat: torsoMat, r: 0.1 });
-      body.position.y = 0.32;
-      t.add(body);
-      var collar = roundBox(0.24, 0.09, 0.06, { mat: shirtWhite, r: 0.02 });
-      collar.position.set(0, 0.62, 0.2);
-      t.add(collar);
-      if (kind === 'father') {
-        var tie = roundBox(0.09, 0.3, 0.04, { mat: tieDark, r: 0.015 });
-        tie.position.set(0, 0.42, 0.22);
-        t.add(tie);
-      } else if (kind === 'mother') {
-        var strap = roundBox(0.06, 0.72, 0.07, { mat: bagMat, r: 0.02 });
-        strap.position.set(-0.13, 0.34, 0.2);
-        strap.rotation.z = 0.35;
-        t.add(strap);
-        var bag = roundBox(0.24, 0.2, 0.1, { mat: bagMat, r: 0.04 });
-        bag.position.set(0.26, 0.12, 0.2);
-        t.add(bag);
-      } else {
-        var chest = roundBox(0.42, 0.44, 0.32, { mat: vestRed, r: 0.08 });
-        chest.position.set(0, 0.3, 0);
-        t.add(chest);
-        var whiteCuff = roundBox(0.12, 0.06, 0.12, { mat: shirtWhite, r: 0.015 });
-        whiteCuff.position.set(0, 0.58, 0.16);
-        t.add(whiteCuff);
+    if (cfg.pufferRibs) {
+      // 小女孩鲜红羽绒背心横纹绗缝
+      for (var pr = 0; pr < 4; pr++) {
+        var puff = mesh(new THREE.TorusGeometry(0.175, 0.022, 8, 18), jacketMat);
+        puff.rotation.x = Math.PI / 2;
+        puff.scale.set(1.08, 0.72, 1);
+        puff.position.set(0, 0.18 + pr * 0.105, 0);
+        torsoG.add(puff);
       }
-      g.add(t);
+      var whiteCollar = mesh(new THREE.TorusGeometry(0.088, 0.024, 8, 14), shirtMat);
+      whiteCollar.rotation.x = Math.PI / 2;
+      whiteCollar.position.set(0, 0.58, 0.01);
+      torsoG.add(whiteCollar);
     }
-
-    function addArm(x) {
-      var arm = new THREE.Group();
-      arm.position.set(x, 1.32, 0);
-      var upper = mesh(new THREE.CylinderGeometry(0.07, 0.055, 0.42, 8), sleeveMat);
-      upper.position.y = -0.21;
-      arm.add(upper);
-      var fore = mesh(new THREE.CylinderGeometry(0.055, 0.045, 0.3, 8), sleeveMat);
-      fore.position.y = -0.52;
-      arm.add(fore);
-      var hand = sphere(0.06, M.skin, 8);
-      hand.position.y = -0.7;
-      arm.add(hand);
-      g.add(arm);
-      return arm;
-    }
-
-    function addHead() {
-      var headG = new THREE.Group();
-      headG.position.y = 1.58;
-      var skull = sphere(0.21, M.skin, 14);
-      skull.scale.set(1, 1.08, 0.92);
-      skull.position.y = 0.05;
-      headG.add(skull);
-
-      var cap = sphere(0.225, hairMat, 12, 0, Math.PI / 2);
-      cap.position.y = 0.22;
-      headG.add(cap);
-      if (kind === 'father') {
-        var back = roundBox(0.3, 0.16, 0.2, { mat: M.hair, r: 0.04 });
-        back.position.set(0, 0.1, -0.13);
-        headG.add(back);
-        var fringe = roundBox(0.18, 0.08, 0.16, { mat: M.hair, r: 0.025 });
-        fringe.position.set(0, 0.28, 0.2);
-        headG.add(fringe);
-      } else if (kind === 'mother') {
-        [-0.21, 0.21].forEach(function (sx) {
-          var side = roundBox(0.12, 0.3, 0.15, { mat: M.hairBrown, r: 0.04 });
-          side.position.set(sx, -0.06, 0.02);
-          headG.add(side);
-        });
-      } else {
-        var pony = roundBox(0.08, 0.28, 0.08, { mat: M.hair, r: 0.03 });
-        pony.position.set(0, -0.04, -0.2);
-        headG.add(pony);
-        var bow = roundBox(0.16, 0.07, 0.04, { mat: shirtWhite, r: 0.015 });
-        bow.position.set(0, 0.12, -0.18);
-        headG.add(bow);
-      }
-
-      [-0.075, 0.075].forEach(function (ex) {
-        var eye = new THREE.Group();
-        eye.position.set(ex, 0.13, 0.19);
-        var white = sphere(0.035, std(0xfdfcf9), 8);
-        white.scale.set(1, 1.25, 0.55);
-        eye.add(white);
-        var iris = sphere(0.018, std(0x3a2a20), 6);
-        iris.position.set(0, 0.004, 0.028);
-        eye.add(iris);
-        headG.add(eye);
+    if (cfg.hasBag) {
+      // 妈妈斜挎黑包 + 白色翻领
+      var bagMat = std(0x1b1b1d, { roughness: 0.58 });
+      var strap = roundBox(0.032, 0.52, 0.022, { mat: bagMat, r: 0.008 });
+      strap.position.set(-0.04, 0.34, 0.135);
+      strap.rotation.z = 0.44;
+      var bag = roundBox(0.18, 0.15, 0.075, { mat: bagMat, r: 0.025 });
+      bag.position.set(0.16, 0.08, 0.10);
+      torsoG.add(strap, bag);
+      [-1, 1].forEach(function (s) {
+        var wCollar = roundBox(0.072, 0.12, 0.025, { mat: shirtMat, r: 0.01 });
+        wCollar.position.set(s * 0.072, 0.54, 0.125);
+        wCollar.rotation.z = s * 0.35;
+        torsoG.add(wCollar);
       });
+    }
+    g.add(torsoG);
 
-      var mouthClosed = roundBox(0.08, 0.022, 0.03, { mat: M.mouth, r: 0.008 });
-      mouthClosed.position.set(0, -0.08, 0.2);
-      headG.add(mouthClosed);
-      var mouthOpen = sphere(0.035, M.mouthDark, 8);
-      mouthOpen.scale.set(1, 1.3, 0.5);
-      mouthOpen.position.set(0, -0.09, 0.19);
-      mouthOpen.visible = false;
-      headG.add(mouthOpen);
+    // 双段自然手臂（上臂 + 肘 + 前臂 + 手掌）
+    function makeArm(side) {
+      var armG = new THREE.Group();
+      armG.position.set(side * ((cfg.shoulderW || 0.21) + 0.035), 1.38, 0);
+      var upper = mesh(new THREE.CylinderGeometry(0.056, 0.046, 0.28, 10), sleeveMat);
+      upper.position.y = -0.14;
+      armG.add(upper);
+      var foreG = new THREE.Group();
+      foreG.position.y = -0.28;
+      var elbow = mesh(new THREE.SphereGeometry(0.046, 8, 8), sleeveMat);
+      var fore = mesh(new THREE.CylinderGeometry(0.044, 0.036, 0.25, 10), sleeveMat);
+      fore.position.y = -0.125;
+      var hand = mesh(new THREE.SphereGeometry(0.042, 10, 8), skinMat);
+      hand.scale.set(0.85, 1.15, 0.72);
+      hand.position.y = -0.27;
+      foreG.add(elbow, fore, hand);
+      armG.add(foreG);
+      g.add(armG);
+      return { arm: armG, fore: foreG };
+    }
+    var armL = makeArm(-1);
+    var armR = makeArm(1);
 
-      g.add(headG);
-      return { head: headG, mouthClosed: mouthClosed, mouthOpen: mouthOpen };
+    // 颈部 + 写实头部 + 手绘五官 + 立体发型
+    var neck = mesh(new THREE.CylinderGeometry(0.052, 0.058, 0.10, 10), skinMat);
+    neck.position.set(0, 1.48, 0);
+    g.add(neck);
+
+    var headG = new THREE.Group();
+    headG.position.set(0, 1.60, 0);
+
+    var skull = mesh(new THREE.SphereGeometry(0.118, 18, 14), skinMat);
+    skull.scale.set(0.92, 1.12, 0.96);
+    headG.add(skull);
+
+    // 手绘写实面部曲面贴片（贴合前脸，支持闭嘴/张嘴切换）
+    var faceClosedMat = new THREE.MeshStandardMaterial({
+      map: makeRealisticFaceTexture({ skin: cfg.skinCss, female: cfg.female, child: cfg.child, smile: cfg.smile, openMouth: false }),
+      roughness: 0.65,
+      transparent: false
+    });
+    var faceOpenMat = new THREE.MeshStandardMaterial({
+      map: makeRealisticFaceTexture({ skin: cfg.skinCss, female: cfg.female, child: cfg.child, openMouth: true }),
+      roughness: 0.65,
+      transparent: false
+    });
+    var faceGeo = new THREE.SphereGeometry(0.1208, 16, 12, Math.PI * 0.14, Math.PI * 0.72, Math.PI * 0.18, Math.PI * 0.66);
+    var mouthClosed = new THREE.Mesh(faceGeo, faceClosedMat);
+    mouthClosed.scale.set(0.92, 1.12, 0.96);
+    var mouthOpen = new THREE.Mesh(faceGeo, faceOpenMat);
+    mouthOpen.scale.set(0.92, 1.12, 0.96);
+    mouthOpen.visible = false;
+    headG.add(mouthClosed, mouthOpen);
+
+    // 立体耳与鼻梁
+    [-0.106, 0.106].forEach(function (ex) {
+      var ear = mesh(new THREE.SphereGeometry(0.024, 8, 6), skinMat);
+      ear.scale.set(0.55, 1.25, 0.75);
+      ear.position.set(ex, -0.01, -0.005);
+      headG.add(ear);
+    });
+    var nose = mesh(new THREE.ConeGeometry(0.016, 0.042, 6), skinMat);
+    nose.position.set(0, -0.012, 0.114);
+    nose.rotation.x = Math.PI * 0.38;
+    headG.add(nose);
+
+    // 立体发型
+    var hairCrown = mesh(new THREE.SphereGeometry(0.124, 16, 12, 0, Math.PI * 2, 0, Math.PI * 0.56), hairMat);
+    hairCrown.scale.set(0.95, 1.10, 1.0);
+    hairCrown.position.set(0, 0.016, -0.006);
+    headG.add(hairCrown);
+    var hairBack = mesh(new THREE.SphereGeometry(0.118, 14, 10), hairMat);
+    hairBack.scale.set(0.94, 0.92, 0.72);
+    hairBack.position.set(0, -0.005, -0.042);
+    headG.add(hairBack);
+
+    if (cfg.hairStyle === 'bob') {
+      // 妈妈棕色齐耳短发
+      [-0.102, 0.102].forEach(function (sx) {
+        var sideLock = roundBox(0.046, 0.18, 0.12, { mat: hairMat, r: 0.02 });
+        sideLock.position.set(sx, -0.045, -0.01);
+        headG.add(sideLock);
+      });
+      var sideBangs = roundBox(0.17, 0.055, 0.06, { mat: hairMat, r: 0.02 });
+      sideBangs.position.set(0.015, 0.088, 0.082);
+      sideBangs.rotation.z = -0.14;
+      headG.add(sideBangs);
+    } else if (cfg.hairStyle === 'ponytail') {
+      // 小女孩齐刘海 + 马尾
+      var bangs = roundBox(0.16, 0.055, 0.055, { mat: hairMat, r: 0.018 });
+      bangs.position.set(0, 0.082, 0.085);
+      headG.add(bangs);
+      var pony = mesh(new THREE.CylinderGeometry(0.028, 0.042, 0.16, 10), hairMat);
+      pony.position.set(0, -0.03, -0.125);
+      pony.rotation.x = 0.25;
+      var hairTie = mesh(new THREE.TorusGeometry(0.032, 0.010, 6, 10), std(0xd93838, { roughness: 0.6 }));
+      hairTie.position.set(0, 0.04, -0.115);
+      headG.add(pony, hairTie);
+    } else {
+      // 爸爸/小弟利落短发前额刘海
+      var topWave = roundBox(0.15, 0.048, 0.08, { mat: hairMat, r: 0.02 });
+      topWave.position.set(0, 0.105, 0.065);
+      headG.add(topWave);
     }
 
-    addLegs();
-    addTorso();
-    var armL = addArm(-0.38);
-    var armR = addArm(0.38);
-    var headInfo = addHead();
-
-    if (child) g.scale.set(0.62, 0.62, 0.62);
+    g.add(headG);
+    g.scale.setScalar(hScale);
 
     g.userData = {
-      kind: 'family-' + kind,
-      head: headInfo.head,
-      leftArm: armL,
-      rightArm: armR,
-      mouthClosed: headInfo.mouthClosed,
-      mouthOpen: headInfo.mouthOpen,
+      kind: cfg.kind,
+      head: headG,
+      leftArm: armL.arm,
+      rightArm: armR.arm,
+      leftForeArm: armL.fore,
+      rightForeArm: armR.fore,
+      leftLeg: leftLeg,
+      rightLeg: rightLeg,
+      mouthClosed: mouthClosed,
+      mouthOpen: mouthOpen,
     };
     return g;
+  }
+
+  function createXiaoDi() {
+    return createRealisticPerson({
+      kind: 'xiaodi',
+      height: 1.72,
+      skinHex: 0xd9ad89,
+      skinCss: '#d9ad89',
+      jacketHex: 0x222936,
+      shirtHex: 0xcbd2da,
+      pantsHex: 0x1e2026,
+      hairHex: 0x181513,
+      shoulderW: 0.21,
+      waistW: 0.16,
+      hairStyle: 'short',
+    });
+  }
+
+  function createFamilyMember(kind) {
+    if (kind === 'father') {
+      return createRealisticPerson({
+        kind: 'family-father',
+        height: 1.76,
+        skinHex: 0xdeb492,
+        skinCss: '#deb492',
+        jacketHex: 0x364152,
+        shirtHex: 0xcad8e8,
+        tieHex: 0x1e2a3c,
+        pantsHex: 0x262c36,
+        hairHex: 0x171412,
+        shoulderW: 0.22,
+        waistW: 0.165,
+        hairStyle: 'short',
+        smile: true,
+      });
+    }
+    if (kind === 'mother') {
+      return createRealisticPerson({
+        kind: 'family-mother',
+        height: 1.62,
+        skinHex: 0xe6bea0,
+        skinCss: '#e6bea0',
+        jacketHex: 0x3b453e,
+        shirtHex: 0xf0f2f0,
+        pantsHex: 0x262928,
+        hairHex: 0x452d20,
+        shoulderW: 0.185,
+        waistW: 0.145,
+        hairStyle: 'bob',
+        female: true,
+        hasBag: true,
+      });
+    }
+    return createRealisticPerson({
+      kind: 'family-daughter',
+      height: 1.20,
+      skinHex: 0xe8c3a5,
+      skinCss: '#e8c3a5',
+      jacketHex: 0xc92c28,
+      shirtHex: 0xeaf1f6,
+      sleeveTex: makeStripedSweaterTexture(),
+      pantsHex: 0x2b303a,
+      shoeHex: 0x3a404a,
+      hairHex: 0x1b1715,
+      shoulderW: 0.165,
+      waistW: 0.14,
+      hairStyle: 'ponytail',
+      child: true,
+      pufferRibs: true,
+    });
   }
 
   return {
