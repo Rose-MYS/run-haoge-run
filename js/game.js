@@ -732,6 +732,8 @@
     golds: 0,
     goldCombo: 0,
     goldComboT: 0,
+    goldLineCount: 0,
+    lastGoldLineLen: 0,
     melonCombo: 0,
     melonComboT: 0,
     turnBoostT: 0,
@@ -1750,15 +1752,32 @@
     }
   }
 
-  // 极小概率事件：一列金西瓜连串出现，可连续吃到并叠加金西瓜语音
-  function spawnGoldLine(lane, z) {
-    var count = CONFIG.goldLineMinCount;
-    var maxCount = CONFIG.goldLineMaxCount || 8;
+  // 极小概率事件：一列金西瓜连串出现，全车道清场，可连续吃到并触发连击奖励
+  function spawnGoldLine(lane, z, minCount) {
+    var count = Math.max(minCount || CONFIG.goldLineMinCount, CONFIG.goldLineMinCount);
+    var maxCount = CONFIG.goldLineMaxCount || 14;
     while (count < maxCount && spawnRandom() < CONFIG.goldLineContinueChance) count++;
+    var zMin = z - (count - 1) * CONFIG.goldLineSpacing - 10;
+    var zMax = z + 10;
+    for (var pi = 0; pi < pickups.length; pi++) {
+      var pk = pickups[pi];
+      if (pk.userData.active && pk.userData.kind !== 'gold' && pk.position.z >= zMin && pk.position.z <= zMax) {
+        pk.userData.active = false;
+        pk.visible = false;
+      }
+    }
+    for (var oi = 0; oi < obstacles.length; oi++) {
+      var ob = obstacles[oi];
+      if (ob.userData.active && ob.position.z >= zMin && ob.position.z <= zMax) {
+        ob.userData.active = false;
+        ob.visible = false;
+      }
+    }
     for (var i = 0; i < count; i++) {
-      var obj = spawnPickup('gold', lane, z + i * CONFIG.goldLineSpacing, 0.52);
+      var obj = spawnPickup('gold', lane, z - i * CONFIG.goldLineSpacing, 0.52);
       if (i === 0) obj.userData.goldLine = true;
     }
+    S.lastGoldLineLen = count * CONFIG.goldLineSpacing + 14;
   }
 
   function randomObstacle(kinds) {
@@ -1940,7 +1959,9 @@
     var forceGoldLine = S.dist >= S.nextGoldLineDist;
     if (forceGoldLine || spawnRandom() < CONFIG.goldLineChance) {
       if (forceGoldLine) S.nextGoldLineDist = S.dist + CONFIG.goldLineGuaranteeMeters;
-      spawnGoldLine(randInt(0, 2), z - 5);
+      S.goldLineCount++;
+      var minGoldLen = (S.goldLineCount % 2 === 0) ? 12 : CONFIG.goldLineMinCount;
+      spawnGoldLine(randInt(0, 2), z - 5, minGoldLen);
       return;
     }
     // 安全开场：前 safeOpenDist 米只出奖励，不出障碍
@@ -1980,7 +2001,8 @@
       spawnPattern(CONFIG.spawnZ);
       S.spawnIn = 0;
       var gapRange = CONFIG.tierGap[currentTier()] || CONFIG.tierGap[CONFIG.tierGap.length - 1];
-      S.nextGap = randInt(gapRange[0], gapRange[1]);
+      S.nextGap = randInt(gapRange[0], gapRange[1]) + (S.lastGoldLineLen || 0);
+      S.lastGoldLineLen = 0;
       if (S.lastPole) S.nextGap += 8;
       if (S.lastStall) S.nextGap += 10;
     }
@@ -2170,7 +2192,15 @@
         S.goldComboT = CONFIG.goldComboWindow;
         if (S.goldCombo >= 3) unlockEgg('goldCombo3');
         window.AppAudio.gold();
-        if (S.goldCombo >= 6 && S.goldCombo % 6 === 0) {
+        if (S.goldCombo >= 12 && S.goldCombo % 12 === 0) {
+          S.bonusScore += 120;
+          unlockEgg('goldChain6');
+          window.AppAudio.playVoiceChain('goldChain6', 2, 420);
+          flashGold();
+          spawnBurst(player.position.x, player.position.y + 1.3, player.position.z);
+          if (window.StreetFeedback) window.StreetFeedback.pop('+120 十二连金瓜！', 'gold');
+          showBubble('十二连超级金瓜串！+120 暴富！', true);
+        } else if (S.goldCombo >= 6 && S.goldCombo % 6 === 0) {
           S.bonusScore += 50;
           unlockEgg('goldChain6');
           window.AppAudio.playVoice('goldChain6');
@@ -2712,6 +2742,8 @@
     S.golds = 0;
     S.goldCombo = 0;
     S.goldComboT = 0;
+    S.goldLineCount = 0;
+    S.lastGoldLineLen = 0;
     S.melonCombo = 0;
     S.melonComboT = 0;
     S.turnBoostT = 0;

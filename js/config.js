@@ -65,7 +65,7 @@ window.CONFIG = {
   goldArcChance: 0.07,
   // 金西瓜串：至少生成 minCount 个，之后每次有 continueChance 概率继续加一个，封顶 maxCount 个
   goldLineMinCount: 6,
-  goldLineMaxCount: 8,
+  goldLineMaxCount: 14,
   goldLineContinueChance: 0.65,
   goldLineSpacing: 2.2,
   // 金西瓜连击窗口：窗口内吃到的多个金西瓜会触发连击

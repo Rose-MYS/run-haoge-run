@@ -130,19 +130,29 @@ window.StreetCampaign = (function () {
       if (!t.blocker) t.blocker = ti % 2 === 0 ? 'barrier' : 'elephant';
     });
 
-    // 保底：每段关卡至少有一条清晰的 n >= 6 金西瓜串（避开弯口且清理同道冲突障碍）
-    var chainStarts = [420, 460, 500];
-    var chainCounts = [6, 7, 7];
-    var chainStart = chainStarts[district] || 420;
-    var chainCount = chainCounts[district] || 6;
-    var chainLane = 1;
-    var chainEnd = chainStart + chainCount * 2.2;
-    stage.encounters = stage.encounters.filter(function (e) {
-      return !(e[2] === chainLane && e[0] >= chainStart - 5 && e[0] <= chainEnd + 5);
+    // 保底：每段关卡至少有一条 n >= 6 和一条 n >= 12 的专属金西瓜串（全车道清场，无保熟卡/障碍/普通瓜干扰）
+    var stageChains = [
+      [{ start: 390, count: 6, lane: 1 }, { start: 720, count: 12, lane: 1 }],
+      [{ start: 450, count: 7, lane: 1 }, { start: 780, count: 12, lane: 2 }],
+      [{ start: 490, count: 7, lane: 1 }, { start: 820, count: 13, lane: 0 }]
+    ][district] || [{ start: 390, count: 6, lane: 1 }, { start: 720, count: 12, lane: 1 }];
+    stageChains.forEach(function (chain) {
+      var chainEnd = chain.start + (chain.count - 1) * 2.2;
+      var displacedMelons = [];
+      stage.encounters = stage.encounters.filter(function (e) {
+        if (e[0] >= chain.start - 10 && e[0] <= chainEnd + 10) {
+          if (e[1] === 'melon') displacedMelons.push(e);
+          return false;
+        }
+        return true;
+      });
+      for (var ci = 0; ci < chain.count; ci++) {
+        stage.encounters.push([Math.round((chain.start + ci * 2.2) * 10) / 10, 'gold', chain.lane]);
+      }
+      for (var mi = 0; mi < displacedMelons.length; mi++) {
+        stage.encounters.push([Math.round((chainEnd + 12 + mi * 3) * 10) / 10, 'melon', displacedMelons[mi][2]]);
+      }
     });
-    for (var ci = 0; ci < chainCount; ci++) {
-      stage.encounters.push([Math.round((chainStart + ci * 2.2) * 10) / 10, 'gold', chainLane]);
-    }
     stage.encounters.sort(function (a, b) { return a[0] - b[0]; });
   });
 
