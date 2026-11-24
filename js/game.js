@@ -326,15 +326,44 @@
   var skillCamBlend = 0;
 
   var piguaSlashMat = new THREE.MeshBasicMaterial({
-    color: 0xeaf6ff,
+    color: 0xdff6ff,
     transparent: true,
     opacity: 0,
     side: THREE.DoubleSide,
     depthWrite: false
   });
-  var piguaSlashArc = new THREE.Mesh(new THREE.RingGeometry(0.68, 1.18, 18, 1, -0.9, 1.85), piguaSlashMat);
+  var piguaSlashCoreMat = new THREE.MeshBasicMaterial({
+    color: 0xffffff,
+    transparent: true,
+    opacity: 0,
+    side: THREE.DoubleSide,
+    depthWrite: false
+  });
+  var piguaSlashArc = new THREE.Group();
+  var piguaSlashOuter = new THREE.Mesh(new THREE.RingGeometry(0.56, 1.18, 22, 1, -0.95, 1.95), piguaSlashMat);
+  var piguaSlashCore = new THREE.Mesh(new THREE.RingGeometry(0.76, 1.02, 22, 1, -0.82, 1.68), piguaSlashCoreMat);
+  piguaSlashCore.position.z = 0.01;
+  piguaSlashArc.add(piguaSlashOuter, piguaSlashCore);
   piguaSlashArc.visible = false;
   scene.add(piguaSlashArc);
+
+  // 劈瓜瞬间十字斩击闪光（克制、锐利、不遮挡赛道视野）
+  var piguaSparkMat = new THREE.MeshBasicMaterial({
+    color: 0xfff8dc,
+    transparent: true,
+    opacity: 0,
+    side: THREE.DoubleSide,
+    depthWrite: false
+  });
+  var piguaHitSpark = new THREE.Group();
+  var sparkH = new THREE.Mesh(new THREE.PlaneGeometry(1.45, 0.14), piguaSparkMat);
+  var sparkV = new THREE.Mesh(new THREE.PlaneGeometry(0.14, 1.65), piguaSparkMat);
+  var sparkCore = new THREE.Mesh(new THREE.CircleGeometry(0.22, 14), piguaSparkMat);
+  sparkCore.position.z = 0.01;
+  piguaHitSpark.add(sparkH, sparkV, sparkCore);
+  piguaHitSpark.visible = false;
+  scene.add(piguaHitSpark);
+  var piguaSparkT = 0;
 
   var sidekickRingMat = new THREE.MeshBasicMaterial({
     color: 0xffd54f,
@@ -1473,8 +1502,9 @@
     PIGUA.startZ = chaser.position.z;
     var piguaTp = piguaTargetPos();
     var piguaSide = piguaTp.x >= player.position.x ? 1 : -1;
-    PIGUA.wayX = Math.max(-2.4, Math.min(2.4, piguaTp.x + piguaSide * 1.35));
-    PIGUA.wayZ = piguaTp.z + 1.05;
+    PIGUA.chopSideOff = piguaSide > 0 ? -0.26 : 0.26;
+    PIGUA.wayX = Math.max(-2.4, Math.min(2.4, piguaTp.x + piguaSide * 1.15));
+    PIGUA.wayZ = piguaTp.z + 2.1;
     PIGUA.splitT = 0;
     S.piguaHeadDir = PIGUA.wayX >= player.position.x ? 1 : -1;
     PIGUA.splitDone = false;
@@ -1499,8 +1529,16 @@
       ? streetItems.split(radius, PIGUA.melon.position)
       : window.Obstacles.createSplitMelonPair(radius, PIGUA.melon.position);
     PIGUA.parent.add(pair);
-    var burst = window.Obstacles.createJuiceBurst(PIGUA.melon.position, 10);
+    var burst = window.Obstacles.createJuiceBurst(PIGUA.melon.position, 16);
     PIGUA.parent.add(burst);
+    var tpNow = piguaTargetPos();
+    piguaHitSpark.position.set(tpNow.x, Math.max(0.42, tpNow.y + 0.12), tpNow.z + 0.08);
+    piguaHitSpark.rotation.set(0, 0, 0.35);
+    piguaHitSpark.scale.setScalar(0.5);
+    piguaHitSpark.visible = true;
+    piguaSparkT = 0.24;
+    startShock(tpNow.x, 0.12, tpNow.z);
+    spawnDust(tpNow.x, 0.15, tpNow.z);
     if (!PIGUA.parent.userData.splitParts) PIGUA.parent.userData.splitParts = [];
     PIGUA.parent.userData.splitParts.push(pair, burst);
     PIGUA.parent.userData.splitTarget = PIGUA.melon;
@@ -1548,6 +1586,11 @@
       return;
     }
 
+    var chopX = tp.x + (PIGUA.chopSideOff || -0.26);
+    var chopZ = tp.z + 0.78;
+    // 冲上来自然停在瓜后方，保持背对镜头（微侧身朝瓜心）劈瓜，不 180° 转身面向镜头
+    var chopYaw = Math.atan2(tp.x - chopX, tp.z - chopZ);
+
     var rel = T - CONFIG.piguaWarnTime;
     var dash1End = CONFIG.piguaDashTime * 0.62;
     if (rel < CONFIG.piguaDashTime) {
@@ -1558,16 +1601,16 @@
       var e = easeOut(p);
       var fromX = inDash2 ? PIGUA.wayX : PIGUA.startX;
       var fromZ = inDash2 ? PIGUA.wayZ : PIGUA.startZ;
-      var toX = inDash2 ? tp.x : PIGUA.wayX;
-      var toZ = inDash2 ? (tp.z - 0.7) : PIGUA.wayZ;
+      var toX = inDash2 ? chopX : PIGUA.wayX;
+      var toZ = inDash2 ? chopZ : PIGUA.wayZ;
       chaser.position.x = fromX + (toX - fromX) * e;
       chaser.position.z = fromZ + (toZ - fromZ) * e;
       chaser.position.y = 0;
       var dashTurnStart = CONFIG.piguaDashTime * 0.65;
       var turnBlend = rel > dashTurnStart ? easeInOut(Math.min(1, (rel - dashTurnStart) / (CONFIG.piguaDashTime - dashTurnStart))) : 0;
-      var dashYaw = Math.PI + Math.atan2(toX - fromX, fromZ - toZ) * 0.25;
-      var targetYaw = Math.atan2(tp.x - chaser.position.x, 0.7);
-      huaQiang.rotation.y = dashYaw * (1 - turnBlend) + targetYaw * turnBlend;
+      var dashYaw = Math.PI + Math.atan2(toX - fromX, fromZ - toZ) * 0.22;
+      var yawDelta = Math.atan2(Math.sin(chopYaw - dashYaw), Math.cos(chopYaw - dashYaw));
+      huaQiang.rotation.y = dashYaw + yawDelta * turnBlend;
       huaQiang.rotation.x = 0;
       piguaSlashArc.visible = false;
       if (ua && ua.isGLB && window.RunnerAnim) {
@@ -1588,10 +1631,10 @@
       return;
     }
 
-    chaser.position.x = tp.x;
-    chaser.position.z = tp.z - 0.7;
+    chaser.position.x = chopX;
+    chaser.position.z = chopZ;
     chaser.position.y = 0;
-    huaQiang.rotation.y = Math.atan2(tp.x - chaser.position.x, 0.7);
+    huaQiang.rotation.y = chopYaw;
     huaQiang.rotation.x = 0;
     huaQiang.position.y = 0;
     if (ua && ua.isGLB && window.RunnerAnim) {
@@ -1643,9 +1686,13 @@
         if (ua.rightKnee) ua.rightKnee.rotation.x = 0.22;
       }
       piguaSlashArc.visible = true;
-      piguaSlashArc.position.set(tp.x + 0.12, 1.0 - spE * 0.48, tp.z - 0.12);
-      piguaSlashArc.rotation.set(0.35, -0.28, 0.82 - spE * 1.85);
-      piguaSlashMat.opacity = Math.sin(sp * Math.PI) * 0.88;
+      piguaSlashArc.position.set(tp.x + 0.06, Math.max(0.45, tp.y + 0.62 - spE * 0.44), tp.z + 0.08);
+      piguaSlashArc.rotation.set(0.22, 0.25, 0.72 - spE * 1.95);
+      var slashScale = 0.85 + Math.sin(sp * Math.PI) * 0.35;
+      piguaSlashArc.scale.set(slashScale, slashScale, 1);
+      var slashAlpha = Math.sin(sp * Math.PI);
+      piguaSlashMat.opacity = slashAlpha * 0.85;
+      piguaSlashCoreMat.opacity = slashAlpha * 0.96;
       PIGUA.flinch = 1;
       if (!PIGUA.splitDone && rel >= CONFIG.piguaImpactTime) {
         PIGUA.splitDone = true;
@@ -1688,7 +1735,8 @@
       chaser.position.x = PIGUA.fromX + (player.position.x - PIGUA.fromX) * re;
       chaser.position.z = PIGUA.fromZ + (S.gap - PIGUA.fromZ) * re;
       var retTurn = easeInOut(Math.min(1, rp2 / 0.25));
-      huaQiang.rotation.y = Math.PI * retTurn;
+      var retDelta = Math.atan2(Math.sin(Math.PI - chopYaw), Math.cos(Math.PI - chopYaw));
+      huaQiang.rotation.y = chopYaw + retDelta * retTurn;
       huaQiang.rotation.x = 0;
       if (ua && ua.isGLB && window.RunnerAnim) {
         window.RunnerAnim.play(huaQiang, 'run', { timeScale: 1.55 });
@@ -1712,6 +1760,16 @@
       }
     }
 
+    if (piguaSparkT > 0) {
+      piguaSparkT = Math.max(0, piguaSparkT - dt);
+      var sk = piguaSparkT / 0.24;
+      var sc = 0.65 + (1 - sk) * 0.95;
+      piguaHitSpark.scale.set(sc, sc, 1);
+      piguaHitSpark.rotation.z = 0.35 + (1 - sk) * 0.45;
+      piguaSparkMat.opacity = sk * 0.95;
+      if (piguaSparkT <= 0) piguaHitSpark.visible = false;
+    }
+
     for (var j = PIGUA.juice.length - 1; j >= 0; j--) {
       var part = PIGUA.juice[j];
       part.mesh.position.addScaledVector(part.vel, dt);
@@ -1729,6 +1787,8 @@
 
   function finishPigua() {
     piguaSlashArc.visible = false;
+    piguaHitSpark.visible = false;
+    piguaSparkT = 0;
     var ua = huaQiang.userData;
     if (ua && ua.clearRigPose) {
       ua.clearRigPose();
