@@ -1309,7 +1309,7 @@ window.RunnerModels = (function () {
     var u = runner && runner.userData;
     if (!u || !u.isGLB) return;
     u.faceKind = kind;
-    if (u.faceMorphs) u.faceMorphs[0] = kind === 'huaqiang-smirk' ? 1 : 0;
+    if (u.faceMorphs) u.faceMorphs[0] = kind === 'huaqiang-smirk' ? 3.6 : 0;
     if (!u.faceMesh) return;
     u.faceMesh.material.map = (kind === 'haoge' && haogeFaceTex) ? haogeFaceTex : faceTexture(kind);
     u.faceMesh.material.transparent = kind === 'haoge' && !!haogeFaceTex;
