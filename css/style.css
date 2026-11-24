@@ -900,3 +900,28 @@ html, body {
   .street-turn-key { display: none; }
   .street-turn-swipe { display: inline; }
 }
+
+
+/* ---- 原剧结尾演出 2.35:1 宽银幕电影遮幅与纯净画幅 ---- */
+body.ending-cinema #hud,
+body.ending-cinema #chapterHud {
+  display: none !important;
+}
+body::before,
+body::after {
+  content: '';
+  position: fixed;
+  left: 0;
+  right: 0;
+  height: 0;
+  background: #060708;
+  z-index: 18;
+  pointer-events: none;
+  transition: height 0.35s ease;
+}
+body::before { top: 0; }
+body::after { bottom: 0; }
+body.ending-cinema::before,
+body.ending-cinema::after {
+  height: 7.2vh;
+}
