@@ -795,24 +795,34 @@ window.RunnerModels = (function () {
     function control(key, name, drop) {
       var bone = model.getObjectByName(name);
       var pivot = new THREE.Group();
+      body[key] = pivot;
+      if (!bone) return null;
       var parentAxes = bone.parent.getWorldQuaternion(new THREE.Quaternion());
       restPose.push({
         bone: bone,
         rotation: bone.quaternion.clone(),
+        previous: bone.quaternion.clone(),
         parentAxes: parentAxes,
         inverseAxes: parentAxes.clone().invert(),
         pivot: pivot,
         drop: drop || 0,
+        applied: false,
       });
-      body[key] = pivot;
       return bone;
     }
 
     control('head', 'Head');
+    control('spine', 'Spine');
+    control('chest', 'Spine01');
+    control('upperChest', 'Spine02');
     control('leftArm', 'LeftArm', -0.59);
     control('rightArm', 'RightArm', 0.59);
+    control('leftForeArm', 'LeftForeArm');
+    control('rightForeArm', 'RightForeArm');
     control('leftLeg', 'LeftUpLeg');
     control('rightLeg', 'RightUpLeg');
+    control('leftKnee', 'LeftLeg');
+    control('rightKnee', 'RightLeg');
     var hand = model.getObjectByName('RightHand');
     var knife = makeKnife(scale, inv);
     knife.position.set(-0.01 * inv, 0.035 * inv, -0.025 * inv);
@@ -822,19 +832,33 @@ window.RunnerModels = (function () {
     body.knifeEdge = knife.userData.edge;
     body.faceKind = 'huaqiang';
     body.faceMorphs = skin.morphTargetInfluences;
-    body.applyManualPose = function () {
+    body.clearRigPose = function () {
+      for (var i = 0; i < restPose.length; i++) restPose[i].pivot.rotation.set(0, 0, 0);
+    };
+    body.restoreRigPose = function () {
+      for (var i = 0; i < restPose.length; i++) {
+        var pose = restPose[i];
+        if (pose.applied) pose.bone.quaternion.copy(pose.previous);
+        pose.applied = false;
+      }
+    };
+    body.applyRigPose = function () {
+      var animated = !!body.currentAction;
       for (var i = 0; i < restPose.length; i++) {
         var pose = restPose[i];
         var angle = pose.pivot.rotation;
+        if (animated && angle.x === 0 && angle.y === 0 && angle.z === 0) continue;
         // Existing poses use runner-space angles. Apply them around the
         // bind axes so the imported bones keep their original orientation.
-        motion.set(angle.x, angle.y, angle.z + pose.drop, 'XYZ');
+        motion.set(angle.x, angle.y, angle.z + (animated ? 0 : pose.drop), 'XYZ');
         delta.setFromEuler(motion);
         local.copy(pose.inverseAxes).multiply(delta).multiply(pose.parentAxes);
-        pose.bone.quaternion.copy(local).multiply(pose.rotation);
+        pose.previous.copy(pose.bone.quaternion);
+        pose.bone.quaternion.copy(local).multiply(animated ? pose.previous : pose.rotation);
+        pose.applied = true;
       }
     };
-    body.applyManualPose();
+    body.applyRigPose();
     return body;
   }
 

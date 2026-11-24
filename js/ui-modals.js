@@ -20,6 +20,8 @@ window.GameModals = (function () {
     { id: 'perfectTurn3', name: '秋名山瓜车', desc: '单局完成 3 次绿灯完美转弯' },
     { id: 'campaignClear', name: '东街脱险', desc: '通关分段逃脱全部三段' },
     { id: 'stars9', name: '满星瓜王', desc: '分段逃脱三段全部获得 3 星' },
+    { id: 'elephantStampede', name: '象鸣神威', desc: '一局召唤保熟大象冲锋 3 次' },
+    { id: 'goldChain6', name: '六连金瓜王', desc: '连续吃到 6 个金西瓜组成金瓜串' },
   ];
 
   var EGG_KEY = 'haoge_eggs';

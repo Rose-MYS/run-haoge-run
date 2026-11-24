@@ -126,6 +126,24 @@ window.StreetCampaign = (function () {
     }
     stage.encounters.sort(function (a, b) { return a[0] - b[0]; });
     stage.turns.sort(function (a, b) { return a.distance - b.distance; });
+    stage.turns.forEach(function (t, ti) {
+      if (!t.blocker) t.blocker = ti % 2 === 0 ? 'barrier' : 'elephant';
+    });
+
+    // 保底：每段关卡至少有一条清晰的 n >= 6 金西瓜串（避开弯口且清理同道冲突障碍）
+    var chainStarts = [420, 460, 500];
+    var chainCounts = [6, 7, 7];
+    var chainStart = chainStarts[district] || 420;
+    var chainCount = chainCounts[district] || 6;
+    var chainLane = 1;
+    var chainEnd = chainStart + chainCount * 2.2;
+    stage.encounters = stage.encounters.filter(function (e) {
+      return !(e[2] === chainLane && e[0] >= chainStart - 5 && e[0] <= chainEnd + 5);
+    });
+    for (var ci = 0; ci < chainCount; ci++) {
+      stage.encounters.push([Math.round((chainStart + ci * 2.2) * 10) / 10, 'gold', chainLane]);
+    }
+    stage.encounters.sort(function (a, b) { return a[0] - b[0]; });
   });
 
   function create() {

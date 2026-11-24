@@ -63,12 +63,13 @@ window.CONFIG = {
   // 普通收集线和弧形线里单个西瓜变成金西瓜的概率
   goldPickupChance: 0.08,
   goldArcChance: 0.07,
-  // 金西瓜串长度无固定上限：至少生成 minCount 个，之后每次有 continueChance 概率继续加一个
-  goldLineMinCount: 4,
+  // 金西瓜串：至少生成 minCount 个，之后每次有 continueChance 概率继续加一个，封顶 maxCount 个
+  goldLineMinCount: 6,
+  goldLineMaxCount: 8,
   goldLineContinueChance: 0.65,
-  goldLineSpacing: 2.4,
-  // 金西瓜连击窗口：窗口内吃到的多个金西瓜会依次触发多声“金西瓜”
-  goldComboWindow: 1.2,
+  goldLineSpacing: 2.2,
+  // 金西瓜连击窗口：窗口内吃到的多个金西瓜会触发连击
+  goldComboWindow: 1.5,
   skillPushGap: 5,
   skillCloseExtra: 1.5,
   skillInvulnTime: 2.5,

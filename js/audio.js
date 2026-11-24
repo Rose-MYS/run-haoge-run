@@ -70,6 +70,7 @@ window.AppAudio = (function () {
     { key: 'haogeBaoshu', label: '这瓜保熟，不熟不要钱！', trigger: '绿灯完美转弯确认', file: 'assets/audio/haoge-shengguadanzi.mp3', keywords: ['不要钱', 'haogebaoshu'], stack: 1 },
     { key: 'kuaipao', label: '快跑啊！', trigger: '分段波次提速冲刺', file: 'assets/audio/haoge-sarilang.mp3', keywords: ['快跑', 'kuaipao'], stack: 1 },
     { key: 'victory', label: '逃出去了！保熟！', trigger: '分段过关冲过出口', file: 'assets/audio/huaqiang-jinxigua.mp3', keywords: ['逃出', '过关', 'victory'], stack: 1 },
+    { key: 'goldChain6', label: '六连金西瓜！发财了！', trigger: '连续吃到 6 个金西瓜', file: 'assets/audio/huaqiang-jinxigua.mp3', keywords: ['六连', '发财', 'goldchain'], stack: 2 },
   ];
 
   function saveCustomVoices() {
@@ -237,6 +238,7 @@ window.AppAudio = (function () {
   registerVoice('haogeBaoshu', 'assets/audio/haoge-shengguadanzi.mp3');
   registerVoice('kuaipao', 'assets/audio/haoge-sarilang.mp3');
   registerVoice('victory', 'assets/audio/huaqiang-jinxigua.mp3');
+  registerVoice('goldChain6', 'assets/audio/huaqiang-jinxigua.mp3', 2);
 
   return {
     ensure: ensure,

@@ -303,6 +303,23 @@
   skillSidekick.visible = false;
   scene.add(skillSidekick);
 
+  var skillElephant = window.StreetElephant ? window.StreetElephant.createElephant({ royal: true }) : new THREE.Group();
+  skillElephant.scale.setScalar(0.95);
+  skillElephant.visible = false;
+  scene.add(skillElephant);
+  var elephantChargeState = { active: false, t: 0, dur: 1.55, startX: 0, startZ: -2.5, hitDone: false };
+
+  var piguaSlashMat = new THREE.MeshBasicMaterial({
+    color: 0xeaf6ff,
+    transparent: true,
+    opacity: 0,
+    side: THREE.DoubleSide,
+    depthWrite: false
+  });
+  var piguaSlashArc = new THREE.Mesh(new THREE.RingGeometry(0.68, 1.18, 18, 1, -0.9, 1.85), piguaSlashMat);
+  piguaSlashArc.visible = false;
+  scene.add(piguaSlashArc);
+
   var sidekickRingMat = new THREE.MeshBasicMaterial({
     color: 0xffd54f,
     transparent: true,
@@ -710,6 +727,7 @@
     themeTo: 0,
     themeBlend: 1,
     score: 0,
+    bonusScore: 0,
     melons: 0,
     golds: 0,
     goldCombo: 0,
@@ -921,7 +939,8 @@
     return Math.floor(distance / CONFIG.distScoreDivisor) +
       S.melons * CONFIG.melonScore +
       S.golds * CONFIG.goldMelonScore +
-      S.certs * CONFIG.certScore;
+      S.certs * CONFIG.certScore +
+      (S.bonusScore || 0);
   }
 
   function updateHUD() {
@@ -1177,6 +1196,7 @@
       if (sarilangFxT <= 0) speechBubble.visible = false;
     }
     if (S.sidekickT > 0) updateSidekick(dt);
+    if (elephantChargeState.active) updateElephantCharge(dt);
     if (S.sidekickT > 0) {
       var skPulse = 0.5 + 0.5 * Math.sin(S.time * 14);
       sidekickRing.visible = true;
@@ -1396,8 +1416,15 @@
       huaQiang.rotation.y = Math.PI;
       huaQiang.rotation.x = 0;
       huaQiang.position.y = 0;
+      piguaSlashArc.visible = false;
       PIGUA.flinch = 0;
-      if (ua) {
+      if (ua && ua.isGLB && window.RunnerAnim) {
+        window.RunnerAnim.play(huaQiang, 'run', { timeScale: 1.15 });
+        if (ua.clearRigPose) ua.clearRigPose();
+        if (ua.spine) ua.spine.rotation.x = 0.08;
+        if (ua.rightArm) ua.rightArm.rotation.x = -0.32;
+        if (ua.rightForeArm) ua.rightForeArm.rotation.x = -0.68;
+      } else if (ua) {
         ua.leftLeg.rotation.x = -0.15;
         ua.rightLeg.rotation.x = 0.15;
         ua.leftArm.rotation.x = 0.25;
@@ -1421,16 +1448,25 @@
       chaser.position.x = fromX + (toX - fromX) * e;
       chaser.position.z = fromZ + (toZ - fromZ) * e;
       chaser.position.y = 0;
-      huaQiang.rotation.y = Math.PI;
+      huaQiang.rotation.y = Math.PI + Math.atan2(toX - fromX, fromZ - toZ) * 0.28;
       huaQiang.rotation.x = 0;
-      if (ua && ua.rightArm) {
+      piguaSlashArc.visible = false;
+      if (ua && ua.isGLB && window.RunnerAnim) {
+        window.RunnerAnim.play(huaQiang, 'run', { timeScale: 1.55 });
+        if (ua.clearRigPose) ua.clearRigPose();
+        if (ua.spine) ua.spine.rotation.x = 0.14;
+        if (ua.chest) ua.chest.rotation.x = 0.08;
+        if (ua.rightArm) ua.rightArm.rotation.x = -0.45;
+        if (ua.rightForeArm) ua.rightForeArm.rotation.x = -0.78;
+        huaQiang.position.y = 0;
+      } else if (ua && ua.rightArm) {
         var ph = S.time * 26;
         ua.leftLeg.rotation.x = -Math.sin(ph) * 0.95;
         ua.rightLeg.rotation.x = Math.sin(ph) * 0.95;
         ua.leftArm.rotation.x = Math.sin(ph) * 0.8;
         ua.rightArm.rotation.x = -Math.sin(ph) * 0.8;
+        huaQiang.position.y = Math.abs(Math.sin(S.time * 26)) * 0.06;
       }
-      huaQiang.position.y = (ua && ua.rightArm) ? Math.abs(Math.sin(S.time * 26)) * 0.06 : 0;
       PIGUA.flinch = 0;
       return;
     }
@@ -1438,30 +1474,59 @@
     chaser.position.x = tp.x;
     chaser.position.z = tp.z - 0.7;
     chaser.position.y = 0;
-    huaQiang.rotation.y = 0; // 面朝镜头劈瓜
+    huaQiang.rotation.y = Math.atan2(tp.x - chaser.position.x, 0.7);
     huaQiang.position.y = 0;
+    if (ua && ua.isGLB && window.RunnerAnim) {
+      window.RunnerAnim.freeze(huaQiang);
+      if (ua.clearRigPose) ua.clearRigPose();
+    }
 
     if (rel < CONFIG.piguaRaiseTime) {
       var rp = Math.min(1, Math.max(0, (rel - CONFIG.piguaDashTime) / (CONFIG.piguaRaiseTime - CONFIG.piguaDashTime)));
       var rpE = easeInOut(rp);
+      piguaSlashArc.visible = false;
       if (ua && ua.rightArm) {
-        ua.rightArm.rotation.x = -2.7 * rpE;
-        ua.leftArm.rotation.x = 1.1 * rpE;
-        ua.leftLeg.rotation.x = -0.5 * rpE;
-        ua.rightLeg.rotation.x = 0.5 * rpE;
+        ua.rightArm.rotation.x = -2.05 * rpE;
+        ua.rightArm.rotation.z = -0.25 * rpE;
+        if (ua.rightForeArm) ua.rightForeArm.rotation.x = -0.85 * rpE;
+        ua.leftArm.rotation.x = 0.45 * rpE;
+        if (ua.leftForeArm) ua.leftForeArm.rotation.x = -0.45 * rpE;
+        if (ua.spine) {
+          ua.spine.rotation.y = -0.24 * rpE;
+          ua.spine.rotation.x = -0.10 * rpE;
+        }
+        if (ua.chest) ua.chest.rotation.y = -0.22 * rpE;
+        ua.leftLeg.rotation.x = -0.36 * rpE;
+        if (ua.leftKnee) ua.leftKnee.rotation.x = 0.48 * rpE;
+        ua.rightLeg.rotation.x = 0.28 * rpE;
+        if (ua.rightKnee) ua.rightKnee.rotation.x = 0.24 * rpE;
       }
-      huaQiang.rotation.x = -0.12 * rpE;
+      huaQiang.rotation.x = -0.06 * rpE;
       PIGUA.flinch = Math.min(1, rpE * 1.2);
     } else if (rel < CONFIG.piguaSwingTime) {
       var sp = Math.min(1, Math.max(0, (rel - CONFIG.piguaRaiseTime) / (CONFIG.piguaSwingTime - CONFIG.piguaRaiseTime)));
       var spE = easeIn(sp);
       if (ua && ua.rightArm) {
-        ua.rightArm.rotation.x = -2.7 + 3.6 * spE;
-        ua.leftArm.rotation.x = 1.1 - 0.9 * spE;
-        ua.leftLeg.rotation.x = -0.45;
-        ua.rightLeg.rotation.x = 0.45;
+        ua.rightArm.rotation.x = -2.05 + 2.95 * spE;
+        ua.rightArm.rotation.z = -0.25 + 0.42 * spE;
+        if (ua.rightForeArm) ua.rightForeArm.rotation.x = -0.85 + 0.65 * spE;
+        ua.leftArm.rotation.x = 0.45 - 0.85 * spE;
+        if (ua.leftForeArm) ua.leftForeArm.rotation.x = -0.45;
+        if (ua.spine) {
+          ua.spine.rotation.y = -0.24 + 0.54 * spE;
+          ua.spine.rotation.x = -0.10 + 0.42 * spE;
+        }
+        if (ua.chest) ua.chest.rotation.y = -0.22 + 0.44 * spE;
+        ua.leftLeg.rotation.x = -0.36 - 0.18 * spE;
+        if (ua.leftKnee) ua.leftKnee.rotation.x = 0.48 + 0.20 * spE;
+        ua.rightLeg.rotation.x = 0.28 + 0.14 * spE;
+        if (ua.rightKnee) ua.rightKnee.rotation.x = 0.24;
       }
-      huaQiang.rotation.x = -0.12 + 0.16 * spE;
+      piguaSlashArc.visible = true;
+      piguaSlashArc.position.set(tp.x + 0.15, 1.05 - spE * 0.45, tp.z - 0.15);
+      piguaSlashArc.rotation.set(0.35, -0.3, 0.85 - spE * 1.9);
+      piguaSlashMat.opacity = Math.sin(sp * Math.PI) * 0.88;
+      huaQiang.rotation.x = -0.06 + 0.14 * spE;
       PIGUA.flinch = 1;
       if (!PIGUA.splitDone && rel >= CONFIG.piguaImpactTime) {
         PIGUA.splitDone = true;
@@ -1471,15 +1536,27 @@
         window.AppAudio.chop();
       }
     } else if (rel < CONFIG.piguaHoldTime) {
+      piguaSlashArc.visible = false;
       if (ua && ua.rightArm) {
-        ua.rightArm.rotation.x = 0.9;
-        ua.leftArm.rotation.x = 0.25;
-        ua.leftLeg.rotation.x = 0;
-        ua.rightLeg.rotation.x = 0;
+        ua.rightArm.rotation.x = 0.90;
+        ua.rightArm.rotation.z = 0.17;
+        if (ua.rightForeArm) ua.rightForeArm.rotation.x = -0.20;
+        ua.leftArm.rotation.x = -0.40;
+        if (ua.leftForeArm) ua.leftForeArm.rotation.x = -0.45;
+        if (ua.spine) {
+          ua.spine.rotation.y = 0.30;
+          ua.spine.rotation.x = 0.32;
+        }
+        if (ua.chest) ua.chest.rotation.y = 0.22;
+        ua.leftLeg.rotation.x = -0.54;
+        if (ua.leftKnee) ua.leftKnee.rotation.x = 0.68;
+        ua.rightLeg.rotation.x = 0.42;
+        if (ua.rightKnee) ua.rightKnee.rotation.x = 0.24;
       }
-      huaQiang.rotation.x = -0.04;
+      huaQiang.rotation.x = 0.04;
       PIGUA.flinch = Math.max(0, 1 - (rel - (CONFIG.piguaHoldTime - 0.45)) / 0.45);
     } else {
+      piguaSlashArc.visible = false;
       if (!PIGUA.returning) {
         PIGUA.returning = true;
         PIGUA.fromX = chaser.position.x;
@@ -1491,14 +1568,21 @@
       chaser.position.z = PIGUA.fromZ + (S.gap - PIGUA.fromZ) * re;
       huaQiang.rotation.y = Math.PI;
       huaQiang.rotation.x = 0;
-      if (ua && ua.rightArm) {
+      if (ua && ua.isGLB && window.RunnerAnim) {
+        window.RunnerAnim.play(huaQiang, 'run', { timeScale: 1.55 });
+        if (ua.clearRigPose) ua.clearRigPose();
+        if (ua.spine) ua.spine.rotation.x = 0.10;
+        if (ua.rightArm) ua.rightArm.rotation.x = -0.35;
+        if (ua.rightForeArm) ua.rightForeArm.rotation.x = -0.68;
+        huaQiang.position.y = 0;
+      } else if (ua && ua.rightArm) {
         var ph2 = S.time * 24;
         ua.leftLeg.rotation.x = -Math.sin(ph2) * 0.9;
         ua.rightLeg.rotation.x = Math.sin(ph2) * 0.9;
         ua.leftArm.rotation.x = Math.sin(ph2) * 0.8;
         ua.rightArm.rotation.x = -Math.sin(ph2) * 0.8;
+        huaQiang.position.y = Math.abs(Math.sin(S.time * 24)) * 0.06;
       }
-      huaQiang.position.y = (ua && ua.rightArm) ? Math.abs(Math.sin(S.time * 24)) * 0.06 : 0;
       PIGUA.flinch = 0;
       if (rel >= CONFIG.piguaAnimTime) {
         chaser.position.set(player.position.x, 0, S.gap);
@@ -1523,8 +1607,11 @@
   }
 
   function finishPigua() {
+    piguaSlashArc.visible = false;
     var ua = huaQiang.userData;
-    if (ua && ua.rightArm) {
+    if (ua && ua.clearRigPose) {
+      ua.clearRigPose();
+    } else if (ua && ua.rightArm) {
       ua.leftArm.rotation.x = 0;
       ua.rightArm.rotation.x = 0;
       ua.leftLeg.rotation.x = 0;
@@ -1559,8 +1646,11 @@
       PIGUA.parent.userData.splitParts = [];
       PIGUA.parent.userData.splitTarget = null;
     }
+    piguaSlashArc.visible = false;
     var ua = huaQiang.userData;
-    if (ua && ua.rightArm) {
+    if (ua && ua.clearRigPose) {
+      ua.clearRigPose();
+    } else if (ua && ua.rightArm) {
       ua.leftArm.rotation.x = 0;
       ua.rightArm.rotation.x = 0;
       ua.leftLeg.rotation.x = 0;
@@ -1657,7 +1747,8 @@
   // 极小概率事件：一列金西瓜连串出现，可连续吃到并叠加金西瓜语音
   function spawnGoldLine(lane, z) {
     var count = CONFIG.goldLineMinCount;
-    while (spawnRandom() < CONFIG.goldLineContinueChance) count++;
+    var maxCount = CONFIG.goldLineMaxCount || 8;
+    while (count < maxCount && spawnRandom() < CONFIG.goldLineContinueChance) count++;
     for (var i = 0; i < count; i++) {
       var obj = spawnPickup('gold', lane, z + i * CONFIG.goldLineSpacing, 0.52);
       if (i === 0) obj.userData.goldLine = true;
@@ -2073,14 +2164,23 @@
         S.goldComboT = CONFIG.goldComboWindow;
         if (S.goldCombo >= 3) unlockEgg('goldCombo3');
         window.AppAudio.gold();
-        if (window.StreetFeedback) window.StreetFeedback.pop('+20 金西瓜', 'gold');
-        if (S.goldCombo >= 2) {
-          var comboN = S.goldCombo;
-          window.AppAudio.playVoiceChain('jinxigua', comboN, 180);
-          showBubble('金西瓜连击 ×' + comboN + '！', true);
+        if (S.goldCombo >= 6 && S.goldCombo % 6 === 0) {
+          S.bonusScore += 50;
+          unlockEgg('goldChain6');
+          window.AppAudio.playVoice('goldChain6');
+          flashGold();
+          spawnBurst(player.position.x, player.position.y + 1.3, player.position.z);
+          if (window.StreetFeedback) window.StreetFeedback.pop('+50 六连金瓜！', 'gold');
+          showBubble('六连金西瓜！+50 发财了！', true);
         } else {
           window.AppAudio.playVoice('jinxigua');
-          showBubble(p.userData.goldLine ? '金西瓜串！发财了！' : '金西瓜！', p.userData.goldLine);
+          if (S.goldCombo >= 2) {
+            if (window.StreetFeedback) window.StreetFeedback.pop('+20 金西瓜 ×' + S.goldCombo, 'gold');
+            showBubble('金西瓜连击 ×' + S.goldCombo + '！', true);
+          } else {
+            if (window.StreetFeedback) window.StreetFeedback.pop('+20 金西瓜', 'gold');
+            showBubble(p.userData.goldLine ? '金西瓜串！发财了！' : '金西瓜！', p.userData.goldLine);
+          }
         }
       } else if (kind === 'cert') {
         S.certs++;
@@ -2180,8 +2280,48 @@
     } else {
       spawnSidekick();
     }
+    spawnElephantCharge();
     flashGold();
     updateSkillHUD();
+  }
+
+  function spawnElephantCharge() {
+    if (S.mode !== 'playing' || !window.StreetElephant) return;
+    elephantChargeState.active = true;
+    elephantChargeState.t = 0;
+    elephantChargeState.hitDone = false;
+    elephantChargeState.startX = player.position.x + (player.position.x >= 0 ? -1.5 : 1.5);
+    elephantChargeState.startZ = player.position.z - 2.6;
+    skillElephant.position.set(elephantChargeState.startX, 0, elephantChargeState.startZ);
+    skillElephant.rotation.set(0, 0, 0);
+    skillElephant.visible = true;
+    S.elephantCharges = (S.elephantCharges || 0) + 1;
+    if (S.elephantCharges >= 3) unlockEgg('elephantStampede');
+  }
+
+  function updateElephantCharge(dt) {
+    if (!elephantChargeState.active) return;
+    elephantChargeState.t += dt;
+    var p = elephantChargeState.t / elephantChargeState.dur;
+    if (p >= 1) {
+      elephantChargeState.active = false;
+      skillElephant.visible = false;
+      return;
+    }
+    var targetX = chaser.position.x;
+    var targetZ = Math.max(chaser.position.z + 8.5, elephantChargeState.startZ + 18);
+    var blendX = Math.min(1, p * 2.2);
+    skillElephant.position.x = elephantChargeState.startX + (targetX - elephantChargeState.startX) * blendX;
+    skillElephant.position.z = elephantChargeState.startZ + (targetZ - elephantChargeState.startZ) * (p * p * (3 - 2 * p));
+    skillElephant.rotation.y = Math.atan2(targetX - skillElephant.position.x, Math.max(0.5, targetZ - skillElephant.position.z)) * 0.35;
+    window.StreetElephant.animateElephant(skillElephant, S.time, 'charge');
+    if (p >= 0.36 && !elephantChargeState.hitDone) {
+      elephantChargeState.hitDone = true;
+      startShock(chaser.position.x, 0.14, chaser.position.z);
+      spawnBurst(chaser.position.x, 1.35, chaser.position.z);
+      spawnDust(chaser.position.x, 0.2, chaser.position.z);
+      S.shake = Math.max(S.shake, 0.38);
+    }
   }
 
   function spawnSidekick() {
@@ -2491,6 +2631,8 @@
     S.sidekickT = 0;
     S.sidekickHitFx = false;
     skillSidekick.visible = false;
+    elephantChargeState.active = false;
+    skillElephant.visible = false;
     sidekickRing.visible = false;
     sidekickRingMat.opacity = 0;
     if (huaQiang.userData) {
@@ -2559,6 +2701,7 @@
     S.dist = chapter ? chapter.from : 0;
     S.chapterTime = 0;
     S.score = 0;
+    S.bonusScore = 0;
     S.melons = 0;
     S.golds = 0;
     S.goldCombo = 0;
@@ -2631,6 +2774,9 @@
     chaser.visible = true;
     S.sidekickT = 0;
     S.sidekickHitFx = false;
+    elephantChargeState.active = false;
+    skillElephant.visible = false;
+    S.elephantCharges = 0;
     S.tipsShown = {};
     S.tipTimer = campaign ? 0 : CONFIG.tipStartDelay;
     hideTip();
@@ -2881,6 +3027,13 @@
       streetRoute.update(S.dist, function (turn) {
         if (turn.practice) return;
         if (campaign && campaign.missedTurn) campaign.missedTurn();
+        var isEl = turn.blocker === 'elephant';
+        if (window.StreetFeedback) {
+          window.StreetFeedback.pop(isEl ? '撞上过路大象了！提前按 ←/→ 转向' : '撞上封路护栏！提前按 ←/→ 转向', 'warn');
+        }
+        if (isEl) window.AppAudio.playVoice('daxiang');
+        S.speed = Math.max(CONFIG.baseSpeed * 0.72, S.speed * 0.78);
+        spawnDust(player.position.x, 0.8, 1.5);
         if (S.skillT <= 0 && P.invuln <= 0 && P.mode !== 'fall') playHit();
       }, campaign && campaign.turned);
       if (S.mode !== 'playing') return;
@@ -3663,8 +3816,15 @@
       } else {
         huaQiang.rotation.x = 0;
         if (huaQiang.userData && huaQiang.userData.isGLB) {
+          var cu = huaQiang.userData;
+          if (cu.clearRigPose) cu.clearRigPose();
           if (S.mode === 'playing' || S.mode === 'menu') {
-            window.RunnerAnim.play(huaQiang, 'run', { timeScale: S.mode === 'menu' ? 5 / 8 : 1 });
+            var runScale = S.mode === 'menu' ? 0.65 : Math.max(0.85, (S.speed || CONFIG.baseSpeed) / CONFIG.baseSpeed * 1.05);
+            window.RunnerAnim.play(huaQiang, 'run', { timeScale: runScale });
+            if (cu.spine) cu.spine.rotation.x = 0.08;
+            if (cu.chest) cu.chest.rotation.x = 0.06;
+            if (cu.rightArm) cu.rightArm.rotation.x = -0.35;
+            if (cu.rightForeArm) cu.rightForeArm.rotation.x = -0.65;
           } else {
             window.RunnerAnim.freeze(huaQiang);
           }

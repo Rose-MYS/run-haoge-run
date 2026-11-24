@@ -550,6 +550,35 @@
   .street-ui .icon-btn { min-width: 42px; min-height: 40px; }
 }
 
+.street-turn-banner {
+  position: fixed;
+  z-index: 62;
+  top: clamp(72px, 14vh, 118px);
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 10px 22px;
+  border: 2px solid #9cf07c;
+  border-radius: 6px;
+  background: rgba(20, 44, 34, 0.92);
+  color: #f6ffea;
+  font: 700 1.08rem/1.35 system-ui, -apple-system, "PingFang SC", sans-serif;
+  letter-spacing: 0.04em;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.42), 0 0 18px rgba(156, 240, 124, 0.35);
+  cursor: pointer;
+  white-space: nowrap;
+  animation: streetTurnPulse 0.65s ease-in-out infinite alternate;
+}
+.street-turn-banner.is-elephant {
+  border-color: #ffd35c;
+  background: rgba(58, 34, 14, 0.92);
+  color: #fff3cf;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.44), 0 0 18px rgba(255, 211, 92, 0.38);
+}
+@keyframes streetTurnPulse {
+  from { transform: translateX(-50%) scale(1); }
+  to { transform: translateX(-50%) scale(1.05); }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .street-ui *, .street-ui *::before, .street-ui *::after {
     scroll-behavior: auto !important;

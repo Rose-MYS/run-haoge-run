@@ -3,14 +3,14 @@ window.StreetRoute = (function () {
 
   var RADIUS = 11;
   var ARC = Math.PI * RADIUS / 2;
-  var NOTICE = 32;
-  var TURN_WINDOW = 18;
+  var NOTICE = 34;
+  var TURN_WINDOW = 22;
   var TURN_GRACE = 4;
   var TURNS = [
-    { distance: 77, direction: 1 },
-    { distance: 177, direction: -1 },
-    { distance: 306, direction: 1 },
-    { distance: 445, direction: -1 },
+    { distance: 77, direction: 1, blocker: 'barrier' },
+    { distance: 177, direction: -1, blocker: 'elephant' },
+    { distance: 306, direction: 1, blocker: 'barrier' },
+    { distance: 445, direction: -1, blocker: 'elephant' },
   ];
 
   function course(turns) {
@@ -134,23 +134,92 @@ window.StreetRoute = (function () {
     icon.scale.set(.55, .36, 1);
     board.add(back, pole, icon);
     group.add(board);
-    return function draw(turn, distance, project, streetWidth, chosen, playing) {
-      group.visible = !!(playing && turn && distance >= turn.distance - NOTICE);
+
+    // 直行封路护栏（红白反光栏 + 路锥）
+    var barrierGroup = new THREE.Group();
+    var railRedMat = new THREE.MeshLambertMaterial({ color: 0xc92c25, emissive: 0x3a0806, emissiveIntensity: 0.35 });
+    var railWhiteMat = new THREE.MeshLambertMaterial({ color: 0xf4efe4 });
+    var poleDarkMat = new THREE.MeshLambertMaterial({ color: 0x26292e });
+    var coneMat = new THREE.MeshLambertMaterial({ color: 0xff6b1a, emissive: 0x451500, emissiveIntensity: 0.25 });
+    for (var bi = -2; bi <= 2; bi++) {
+      var seg = new THREE.Mesh(new THREE.BoxGeometry(1.18, 0.32, 0.14), (bi + 2) % 2 === 0 ? railRedMat : railWhiteMat);
+      seg.position.set(bi * 1.18, 0.92, 0);
+      seg.castShadow = true;
+      barrierGroup.add(seg);
+      var segLow = new THREE.Mesh(new THREE.BoxGeometry(1.18, 0.24, 0.12), (bi + 2) % 2 === 1 ? railRedMat : railWhiteMat);
+      segLow.position.set(bi * 1.18, 0.44, 0);
+      barrierGroup.add(segLow);
+    }
+    [-2.4, 0, 2.4].forEach(function (px) {
+      var leg = new THREE.Mesh(new THREE.BoxGeometry(0.14, 1.18, 0.16), poleDarkMat);
+      leg.position.set(px, 0.59, 0);
+      barrierGroup.add(leg);
+    });
+    [-2.1, 2.1].forEach(function (cx) {
+      var cone = new THREE.Mesh(new THREE.ConeGeometry(0.24, 0.68, 8), coneMat);
+      cone.position.set(cx, 0.34, 0.65);
+      cone.castShadow = true;
+      barrierGroup.add(cone);
+    });
+    group.add(barrierGroup);
+
+    // 直行过路大象路障
+    var elephantGroup = window.StreetElephant ? window.StreetElephant.createElephant({ royal: false }) : new THREE.Group();
+    elephantGroup.scale.setScalar(1.05);
+    group.add(elephantGroup);
+
+    return function draw(turn, distance, project, streetWidth, chosen, playing, elapsed, pastResult) {
+      var showPast = !!(pastResult && !pastResult.confirmed && distance < pastResult.turn.distance + TURN_GRACE + 5.5);
+      var activeTurn = (turn && distance >= turn.distance - NOTICE) ? turn : (showPast ? pastResult.turn : null);
+      group.visible = !!(playing && activeTurn);
       if (!group.visible) return;
-      signal.color.setHex(chosen || distance >= turn.distance - TURN_WINDOW ? 0xb9ee8d : 0xf3c16f);
-      paint.color.copy(signal.color);
-      arrows.forEach(function (mark) {
-        var p = project(turn.distance + mark.offset, 0);
-        mark.carrier.position.set(p.x, .019, p.z);
-        mark.carrier.rotation.y = p.yaw;
-        mark.arrow.scale.x = turn.direction;
-      });
-      var at = turn.distance - 1;
-      var edge = project(at, -turn.direction * (streetWidth(at) + .48));
-      board.position.set(edge.x, .115, edge.z);
-      board.rotation.y = edge.yaw;
-      icon.position.x = -.22 * turn.direction;
-      icon.scale.x = .55 * turn.direction;
+      var showTurnPrompt = !!(turn && activeTurn === turn);
+      arrows.forEach(function (mark) { mark.carrier.visible = showTurnPrompt; });
+      board.visible = showTurnPrompt;
+      if (showTurnPrompt) {
+        signal.color.setHex(chosen || distance >= turn.distance - TURN_WINDOW ? 0xb9ee8d : 0xf3c16f);
+        paint.color.copy(signal.color);
+        arrows.forEach(function (mark) {
+          var p = project(turn.distance + mark.offset, 0);
+          mark.carrier.position.set(p.x, .019, p.z);
+          mark.carrier.rotation.y = p.yaw;
+          mark.arrow.scale.x = turn.direction;
+        });
+        var at = turn.distance - 1;
+        var edge = project(at, -turn.direction * (streetWidth(at) + .48));
+        board.position.set(edge.x, .115, edge.z);
+        board.rotation.y = edge.yaw;
+        icon.position.x = -.22 * turn.direction;
+        icon.scale.x = .55 * turn.direction;
+      }
+
+      // 弯口直行尽头的物理阻挡物（沿直行切线方向放在弯口前方）
+      var blockerType = activeTurn.blocker || 'barrier';
+      var base = project(activeTurn.distance, 0);
+      var fwdX = -Math.sin(base.yaw);
+      var fwdZ = -Math.cos(base.yaw);
+      var sideX = Math.cos(base.yaw);
+      var sideZ = -Math.sin(base.yaw);
+      var ahead = 10.2;
+      if (blockerType === 'elephant' && window.StreetElephant) {
+        barrierGroup.visible = false;
+        elephantGroup.visible = true;
+        var walkT = elapsed || 0;
+        var crossOffset = Math.sin(walkT * 1.15) * 2.4;
+        var crossDir = Math.cos(walkT * 1.15) >= 0 ? 1 : -1;
+        elephantGroup.position.set(
+          base.x + fwdX * ahead + sideX * crossOffset,
+          0,
+          base.z + fwdZ * ahead + sideZ * crossOffset
+        );
+        elephantGroup.rotation.y = base.yaw + (crossDir > 0 ? Math.PI / 2 : -Math.PI / 2);
+        window.StreetElephant.animateElephant(elephantGroup, walkT, showPast ? 'startle' : 'walk');
+      } else {
+        elephantGroup.visible = false;
+        barrierGroup.visible = true;
+        barrierGroup.position.set(base.x + fwdX * ahead, 0, base.z + fwdZ * ahead);
+        barrierGroup.rotation.y = base.yaw;
+      }
     };
   }
 
@@ -185,6 +254,16 @@ window.StreetRoute = (function () {
     turnButton.addEventListener('click', function () {
       if (routeTurns[nextTurn] && !turnButton.hidden && onTurn) onTurn(routeTurns[nextTurn].direction);
     });
+
+    var banner = document.createElement('button');
+    banner.type = 'button';
+    banner.id = 'streetTurnBanner';
+    banner.className = 'street-turn-banner';
+    banner.hidden = true;
+    banner.addEventListener('click', function () {
+      if (routeTurns[nextTurn] && !chosen && onTurn) onTurn(routeTurns[nextTurn].direction);
+    });
+    document.body.appendChild(banner);
 
     var sky = document.createElement('canvas');
     sky.width = sky.height = 256;
@@ -357,6 +436,7 @@ window.StreetRoute = (function () {
       while (nextTurn < routeTurns.length && routeTurns[nextTurn].distance + TURN_GRACE <= (distance || 0)) nextTurn++;
       chosen = false;
       resultTurn = null;
+      banner.hidden = true;
       updateHint(distance);
     }
 
@@ -417,10 +497,19 @@ window.StreetRoute = (function () {
         turnSwipe.textContent = direction > 0 ? '向右滑动' : '向左滑动';
         turnButton.textContent = '点此' + name;
       }
+      var showBanner = !!(ready && active);
+      banner.hidden = !showBanner;
+      if (showBanner) {
+        var blockerLabel = active.blocker === 'elephant' ? '前方大象挡路！' : '前方封路护栏！';
+        var bannerText = (direction < 0 ? '← 立刻左转！' : '立刻右转！ →') + '  ' + blockerLabel;
+        if (banner.textContent !== bannerText) banner.textContent = bannerText;
+        banner.classList.toggle('is-elephant', active.blocker === 'elephant');
+      }
     }
 
     function turnMissMessage(turn) {
-      return turn.practice ? '下次提示变绿时确认转弯' : '错过转向';
+      if (turn.practice) return '下次提示变绿时确认转弯';
+      return turn.blocker === 'elephant' ? '撞上过路大象！' : '撞上封路护栏！';
     }
 
     var drawArt = window.StreetArt.create(staticScenery, project, streetWidth, stages || []);
@@ -428,9 +517,12 @@ window.StreetRoute = (function () {
     var transformed = [];
     var particles = new WeakMap();
     function render(renderer, camera, distance, playing, elapsed) {
-      if (!playing && !stages) hint.hidden = true;
+      if (!playing) {
+        if (!stages) hint.hidden = true;
+        banner.hidden = true;
+      }
       drawStreet(distance, elapsed);
-      drawMarkers(routeTurns[nextTurn], distance, project, streetWidth, chosen, playing);
+      drawMarkers(routeTurns[nextTurn], distance, project, streetWidth, chosen, playing, elapsed, resultTurn);
       try {
         scene.children.forEach(function (obj) {
           if (!obj.visible || obj.isLight || excluded.has(obj)) {
