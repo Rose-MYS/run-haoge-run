@@ -16,11 +16,11 @@
     var root = new THREE.Group();
 
     var skinMat = mat(royal ? 'royalSkin' : 'streetSkin', {
-      color: royal ? 0x808796 : 0x737985,
-      emissive: royal ? 0x161922 : 0x0e1015,
-      emissiveIntensity: 0.25
+      color: royal ? 0x5c6473 : 0x464d59,
+      emissive: royal ? 0x161922 : 0x101318,
+      emissiveIntensity: 0.30
     });
-    var darkMat = mat('darkSkin', { color: 0x4f545e });
+    var darkMat = mat('darkSkin', { color: 0x2d323b });
     var earInnerMat = mat('earInner', { color: 0xb98b88 });
     var tuskMat = mat('tusk', { color: 0xf7f1dc, emissive: 0x332b18, emissiveIntensity: 0.2 });
     var eyeMat = mat('eye', { color: 0x111111 });

@@ -304,10 +304,10 @@
   scene.add(skillSidekick);
 
   var skillElephant = window.StreetElephant ? window.StreetElephant.createElephant({ royal: true }) : new THREE.Group();
-  skillElephant.scale.setScalar(0.95);
+  skillElephant.scale.setScalar(1.42);
   skillElephant.visible = false;
   scene.add(skillElephant);
-  var elephantChargeState = { active: false, t: 0, dur: 1.55, startX: 0, startZ: -2.5, hitDone: false };
+  var elephantChargeState = { active: false, t: 0, dur: 2.4, startX: 0, startZ: -2.5, hitDone: false };
 
   var piguaSlashMat = new THREE.MeshBasicMaterial({
     color: 0xeaf6ff,
@@ -2309,7 +2309,7 @@
       return;
     }
     var targetX = chaser.position.x;
-    var targetZ = Math.max(chaser.position.z + 8.5, elephantChargeState.startZ + 18);
+    var targetZ = Math.max(chaser.position.z + 13, elephantChargeState.startZ + 25);
     var blendX = Math.min(1, p * 2.2);
     skillElephant.position.x = elephantChargeState.startX + (targetX - elephantChargeState.startX) * blendX;
     skillElephant.position.z = elephantChargeState.startZ + (targetZ - elephantChargeState.startZ) * (p * p * (3 - 2 * p));

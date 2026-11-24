@@ -6,6 +6,8 @@ window.StreetRoute = (function () {
   var NOTICE = 34;
   var TURN_WINDOW = 22;
   var TURN_GRACE = 4;
+  var BLOCKER_SHOW_BEFORE = 78;
+  var BLOCKER_KEEP_AFTER = ARC + 20;
   var TURNS = [
     { distance: 77, direction: 1, blocker: 'barrier' },
     { distance: 177, direction: -1, blocker: 'elephant' },
@@ -135,47 +137,115 @@ window.StreetRoute = (function () {
     board.add(back, pole, icon);
     group.add(board);
 
-    // 直行封路护栏（红白反光栏 + 路锥）
+    // 弯口直行尽头物理阻挡根节点（独立于箭头预告，提前 78m 出现并在整段弯道持续显示）
+    var blockerRoot = new THREE.Group();
+    blockerRoot.name = 'StreetTurnBlocker';
+    parent.add(blockerRoot);
+
+    // 全幅重型封路护栏墙（12.4m 宽 × 2.45m 高 + 警示横幅 + 闪烁警示灯 + 7 个路锥）
     var barrierGroup = new THREE.Group();
-    var railRedMat = new THREE.MeshLambertMaterial({ color: 0xc92c25, emissive: 0x3a0806, emissiveIntensity: 0.35 });
+    var railRedMat = new THREE.MeshLambertMaterial({ color: 0xc92c25, emissive: 0x420806, emissiveIntensity: 0.4 });
     var railWhiteMat = new THREE.MeshLambertMaterial({ color: 0xf4efe4 });
     var poleDarkMat = new THREE.MeshLambertMaterial({ color: 0x26292e });
-    var coneMat = new THREE.MeshLambertMaterial({ color: 0xff6b1a, emissive: 0x451500, emissiveIntensity: 0.25 });
-    for (var bi = -2; bi <= 2; bi++) {
-      var seg = new THREE.Mesh(new THREE.BoxGeometry(1.18, 0.32, 0.14), (bi + 2) % 2 === 0 ? railRedMat : railWhiteMat);
-      seg.position.set(bi * 1.18, 0.92, 0);
-      seg.castShadow = true;
-      barrierGroup.add(seg);
-      var segLow = new THREE.Mesh(new THREE.BoxGeometry(1.18, 0.24, 0.12), (bi + 2) % 2 === 1 ? railRedMat : railWhiteMat);
-      segLow.position.set(bi * 1.18, 0.44, 0);
-      barrierGroup.add(segLow);
+    var concreteMat = new THREE.MeshLambertMaterial({ color: 0x7d8084 });
+    var hazardYellowMat = new THREE.MeshLambertMaterial({ color: 0xeab308, emissive: 0x3b2a00, emissiveIntensity: 0.25 });
+    var coneMat = new THREE.MeshLambertMaterial({ color: 0xff6b1a, emissive: 0x451500, emissiveIntensity: 0.28 });
+    var beaconMat = new THREE.MeshLambertMaterial({ color: 0xffaa00, emissive: 0xff6600, emissiveIntensity: 0.9 });
+
+    // 水泥防撞墩底座
+    var jerseyBase = new THREE.Mesh(new THREE.BoxGeometry(12.4, 0.78, 0.62), concreteMat);
+    jerseyBase.position.set(0, 0.39, 0);
+    jerseyBase.castShadow = true;
+    jerseyBase.receiveShadow = true;
+    barrierGroup.add(jerseyBase);
+    for (var hi = -5; hi <= 5; hi++) {
+      var stripe = new THREE.Mesh(new THREE.BoxGeometry(0.56, 0.26, 0.65), hi % 2 === 0 ? hazardYellowMat : poleDarkMat);
+      stripe.position.set(hi * 1.08, 0.56, 0);
+      barrierGroup.add(stripe);
     }
-    [-2.4, 0, 2.4].forEach(function (px) {
-      var leg = new THREE.Mesh(new THREE.BoxGeometry(0.14, 1.18, 0.16), poleDarkMat);
-      leg.position.set(px, 0.59, 0);
+
+    // 三层红白反光横栏（10 段 × 1.24m = 12.4m）
+    var tierHeights = [1.10, 1.68, 2.22];
+    for (var ti = 0; ti < tierHeights.length; ti++) {
+      for (var bi = 0; bi < 10; bi++) {
+        var isRed = (bi + ti) % 2 === 0;
+        var seg = new THREE.Mesh(new THREE.BoxGeometry(1.24, 0.34, 0.22), isRed ? railRedMat : railWhiteMat);
+        seg.position.set(-5.58 + bi * 1.24, tierHeights[ti], 0);
+        seg.castShadow = true;
+        barrierGroup.add(seg);
+      }
+    }
+
+    // 6 根重型立柱 + 4 盏顶部警示灯
+    [-5.8, -3.5, -1.2, 1.2, 3.5, 5.8].forEach(function (px) {
+      var leg = new THREE.Mesh(new THREE.BoxGeometry(0.20, 2.55, 0.26), poleDarkMat);
+      leg.position.set(px, 1.275, 0);
+      leg.castShadow = true;
       barrierGroup.add(leg);
     });
-    [-2.1, 2.1].forEach(function (cx) {
-      var cone = new THREE.Mesh(new THREE.ConeGeometry(0.24, 0.68, 8), coneMat);
-      cone.position.set(cx, 0.34, 0.65);
-      cone.castShadow = true;
-      barrierGroup.add(cone);
+    [-4.6, -1.6, 1.6, 4.6].forEach(function (bx) {
+      var beacon = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.24, 0.26), beaconMat);
+      beacon.position.set(bx, 2.66, 0);
+      barrierGroup.add(beacon);
     });
-    group.add(barrierGroup);
 
-    // 直行过路大象路障
-    var elephantGroup = window.StreetElephant ? window.StreetElephant.createElephant({ royal: false }) : new THREE.Group();
-    elephantGroup.scale.setScalar(1.05);
-    group.add(elephantGroup);
+    // 顶部“前方封路 · 禁止直行”横幅牌
+    var signCanvas = document.createElement('canvas');
+    signCanvas.width = 512;
+    signCanvas.height = 96;
+    var sctx = signCanvas.getContext('2d');
+    sctx.fillStyle = '#991b1b';
+    sctx.fillRect(0, 0, 512, 96);
+    sctx.strokeStyle = '#facc15';
+    sctx.lineWidth = 8;
+    sctx.strokeRect(4, 4, 504, 88);
+    sctx.fillStyle = '#fef08a';
+    sctx.font = 'bold 42px system-ui, -apple-system, "PingFang SC", sans-serif';
+    sctx.textAlign = 'center';
+    sctx.textBaseline = 'middle';
+    sctx.fillText('前方封路 · 禁止直行', 256, 50);
+    var signTex = new THREE.CanvasTexture(signCanvas);
+    signTex.encoding = THREE.sRGBEncoding;
+    var signBoard = new THREE.Mesh(
+      new THREE.BoxGeometry(5.6, 1.05, 0.16),
+      new THREE.MeshBasicMaterial({ map: signTex })
+    );
+    signBoard.position.set(0, 2.95, 0);
+    barrierGroup.add(signBoard);
+
+    // 护栏前方 7 个高大路锥
+    [-4.8, -3.2, -1.6, 0, 1.6, 3.2, 4.8].forEach(function (cx) {
+      var cone = new THREE.Mesh(new THREE.ConeGeometry(0.30, 0.95, 10), coneMat);
+      cone.position.set(cx, 0.475, 1.15);
+      cone.castShadow = true;
+      var ring = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.22, 0.18, 10), railWhiteMat);
+      ring.position.set(cx, 0.52, 1.15);
+      barrierGroup.add(cone, ring);
+    });
+    blockerRoot.add(barrierGroup);
+
+    // 全幅过路大象群（3 头大象首尾相接横跨整条马路，总宽 ~13m 无缝封路）
+    var elephantConvoy = new THREE.Group();
+    var elephantSpecs = [
+      { scale: 1.55, x: -3.9, z: 0.0, phase: 0.0 },
+      { scale: 1.48, x: 0.2, z: 0.55, phase: 0.8 },
+      { scale: 1.12, x: 4.1, z: -0.35, phase: 1.5 },
+    ];
+    var convoyMembers = [];
+    if (window.StreetElephant) {
+      elephantSpecs.forEach(function (spec) {
+        var el = window.StreetElephant.createElephant({ royal: false });
+        el.scale.setScalar(spec.scale);
+        el.position.set(spec.x, 0, spec.z);
+        elephantConvoy.add(el);
+        convoyMembers.push({ el: el, x: spec.x, z: spec.z, phase: spec.phase });
+      });
+    }
+    blockerRoot.add(elephantConvoy);
 
     return function draw(turn, distance, project, streetWidth, chosen, playing, elapsed, pastResult) {
-      var showPast = !!(pastResult && !pastResult.confirmed && distance < pastResult.turn.distance + TURN_GRACE + 5.5);
-      var activeTurn = (turn && distance >= turn.distance - NOTICE) ? turn : (showPast ? pastResult.turn : null);
-      group.visible = !!(playing && activeTurn);
-      if (!group.visible) return;
-      var showTurnPrompt = !!(turn && activeTurn === turn);
-      arrows.forEach(function (mark) { mark.carrier.visible = showTurnPrompt; });
-      board.visible = showTurnPrompt;
+      var showTurnPrompt = !!(playing && turn && distance >= turn.distance - NOTICE);
+      group.visible = showTurnPrompt;
       if (showTurnPrompt) {
         signal.color.setHex(chosen || distance >= turn.distance - TURN_WINDOW ? 0xb9ee8d : 0xf3c16f);
         paint.color.copy(signal.color);
@@ -193,32 +263,44 @@ window.StreetRoute = (function () {
         icon.scale.x = .55 * turn.direction;
       }
 
-      // 弯口直行尽头的物理阻挡物（沿直行切线方向放在弯口前方）
-      var blockerType = activeTurn.blocker || 'barrier';
-      var base = project(activeTurn.distance, 0);
+      var keepPast = !!(pastResult && distance < pastResult.turn.distance + BLOCKER_KEEP_AFTER);
+      var blockerTurn = keepPast ? pastResult.turn : (turn && distance >= turn.distance - BLOCKER_SHOW_BEFORE ? turn : null);
+      blockerRoot.visible = !!(playing && blockerTurn);
+      if (!blockerRoot.visible) return;
+
+      var showMissed = !!(keepPast && !pastResult.confirmed);
+      var blockerType = blockerTurn.blocker || 'barrier';
+      var base = project(blockerTurn.distance, 0);
       var fwdX = -Math.sin(base.yaw);
       var fwdZ = -Math.cos(base.yaw);
       var sideX = Math.cos(base.yaw);
       var sideZ = -Math.sin(base.yaw);
-      var ahead = 10.2;
-      if (blockerType === 'elephant' && window.StreetElephant) {
+      var ahead = blockerType === 'elephant' ? 9.8 : 11.4;
+      var outShift = -blockerTurn.direction * 1.0;
+
+      blockerRoot.position.set(
+        base.x + fwdX * ahead + sideX * outShift,
+        0,
+        base.z + fwdZ * ahead + sideZ * outShift
+      );
+      blockerRoot.rotation.y = base.yaw - blockerTurn.direction * 0.14;
+
+      var walkT = elapsed || 0;
+      if (blockerType === 'elephant' && convoyMembers.length) {
         barrierGroup.visible = false;
-        elephantGroup.visible = true;
-        var walkT = elapsed || 0;
-        var crossOffset = Math.sin(walkT * 1.15) * 2.4;
-        var crossDir = Math.cos(walkT * 1.15) >= 0 ? 1 : -1;
-        elephantGroup.position.set(
-          base.x + fwdX * ahead + sideX * crossOffset,
-          0,
-          base.z + fwdZ * ahead + sideZ * crossOffset
-        );
-        elephantGroup.rotation.y = base.yaw + (crossDir > 0 ? Math.PI / 2 : -Math.PI / 2);
-        window.StreetElephant.animateElephant(elephantGroup, walkT, showPast ? 'startle' : 'walk');
+        elephantConvoy.visible = true;
+        var crossOffset = Math.sin(walkT * 0.75) * 1.15;
+        var crossDir = Math.cos(walkT * 0.75) >= 0 ? 1 : -1;
+        for (var mi = 0; mi < convoyMembers.length; mi++) {
+          var m = convoyMembers[mi];
+          m.el.position.set(m.x + crossOffset, 0, m.z);
+          m.el.rotation.y = crossDir > 0 ? Math.PI / 2 : -Math.PI / 2;
+          window.StreetElephant.animateElephant(m.el, walkT + m.phase, showMissed ? 'startle' : 'walk');
+        }
       } else {
-        elephantGroup.visible = false;
+        elephantConvoy.visible = false;
         barrierGroup.visible = true;
-        barrierGroup.position.set(base.x + fwdX * ahead, 0, base.z + fwdZ * ahead);
-        barrierGroup.rotation.y = base.yaw;
+        beaconMat.emissiveIntensity = 0.45 + 0.55 * (0.5 + 0.5 * Math.sin(walkT * 10));
       }
     };
   }
