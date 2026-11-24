@@ -792,7 +792,7 @@ window.RunnerModels = (function () {
     var motion = new THREE.Euler();
     model.updateMatrixWorld(true);
 
-    function control(key, name, drop) {
+    function control(key, name, drop, isLocal) {
       var bone = model.getObjectByName(name);
       var pivot = new THREE.Group();
       body[key] = pivot;
@@ -806,23 +806,24 @@ window.RunnerModels = (function () {
         inverseAxes: parentAxes.clone().invert(),
         pivot: pivot,
         drop: drop || 0,
+        isLocal: !!isLocal,
         applied: false,
       });
       return bone;
     }
 
     control('head', 'Head');
-    control('spine', 'Spine');
+    control('spine', 'Spine02');
     control('chest', 'Spine01');
-    control('upperChest', 'Spine02');
+    control('upperChest', 'Spine');
     control('leftArm', 'LeftArm', -0.59);
     control('rightArm', 'RightArm', 0.59);
-    control('leftForeArm', 'LeftForeArm');
-    control('rightForeArm', 'RightForeArm');
+    control('leftForeArm', 'LeftForeArm', 0, true);
+    control('rightForeArm', 'RightForeArm', 0, true);
     control('leftLeg', 'LeftUpLeg');
     control('rightLeg', 'RightUpLeg');
-    control('leftKnee', 'LeftLeg');
-    control('rightKnee', 'RightLeg');
+    control('leftKnee', 'LeftLeg', 0, true);
+    control('rightKnee', 'RightLeg', 0, true);
     var hand = model.getObjectByName('RightHand');
     var knife = makeKnife(scale, inv);
     knife.position.set(-0.01 * inv, 0.035 * inv, -0.025 * inv);
@@ -848,6 +849,14 @@ window.RunnerModels = (function () {
         var pose = restPose[i];
         var angle = pose.pivot.rotation;
         if (animated && angle.x === 0 && angle.y === 0 && angle.z === 0) continue;
+        if (pose.isLocal) {
+          motion.set(angle.x, angle.y, angle.z, 'XYZ');
+          delta.setFromEuler(motion);
+          pose.previous.copy(pose.bone.quaternion);
+          pose.bone.quaternion.copy(animated ? pose.previous : pose.rotation).multiply(delta);
+          pose.applied = true;
+          continue;
+        }
         // Existing poses use runner-space angles. Apply them around the
         // bind axes so the imported bones keep their original orientation.
         motion.set(angle.x, angle.y, angle.z + (animated ? 0 : pose.drop), 'XYZ');

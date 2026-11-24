@@ -224,21 +224,27 @@ window.StreetRoute = (function () {
     });
     blockerRoot.add(barrierGroup);
 
-    // 全幅过路大象群（3 头大象首尾相接横跨整条马路，总宽 ~13m 无缝封路）
+    // 全幅过路大象家庭群（两头成年象前后留出安全间距不互撞，小象在后侧伴行）
     var elephantConvoy = new THREE.Group();
     var elephantSpecs = [
-      { scale: 1.55, x: -3.9, z: 0.0, phase: 0.0 },
-      { scale: 1.48, x: 0.2, z: 0.55, phase: 0.8 },
-      { scale: 1.12, x: 4.1, z: -0.35, phase: 1.5 },
+      { baseScale: 1.24, baseX: -2.65, baseZ: 0.0, phase: 0.0 },
+      { baseScale: 1.20, baseX: 2.65, baseZ: 0.0, phase: 0.9 },
+      { baseScale: 0.78, baseX: 0.0, baseZ: -2.25, phase: 1.6 },
     ];
     var convoyMembers = [];
     if (window.StreetElephant) {
       elephantSpecs.forEach(function (spec) {
         var el = window.StreetElephant.createElephant({ royal: false });
-        el.scale.setScalar(spec.scale);
-        el.position.set(spec.x, 0, spec.z);
+        el.scale.setScalar(spec.baseScale);
+        el.position.set(spec.baseX, 0, spec.baseZ);
         elephantConvoy.add(el);
-        convoyMembers.push({ el: el, x: spec.x, z: spec.z, phase: spec.phase });
+        convoyMembers.push({
+          el: el,
+          baseScale: spec.baseScale,
+          baseX: spec.baseX,
+          baseZ: spec.baseZ,
+          phase: spec.phase
+        });
       });
     }
     blockerRoot.add(elephantConvoy);
@@ -275,25 +281,29 @@ window.StreetRoute = (function () {
       var fwdZ = -Math.cos(base.yaw);
       var sideX = Math.cos(base.yaw);
       var sideZ = -Math.sin(base.yaw);
-      var ahead = blockerType === 'elephant' ? 9.8 : 11.4;
-      var outShift = -blockerTurn.direction * 1.0;
+      var isElephant = blockerType === 'elephant' && convoyMembers.length;
+      var ahead = isElephant ? 12.6 : 11.4;
+      var outShift = -blockerTurn.direction * (isElephant ? 1.25 : 1.0);
 
       blockerRoot.position.set(
         base.x + fwdX * ahead + sideX * outShift,
         0,
         base.z + fwdZ * ahead + sideZ * outShift
       );
-      blockerRoot.rotation.y = base.yaw - blockerTurn.direction * 0.14;
+      blockerRoot.rotation.y = base.yaw - blockerTurn.direction * (isElephant ? 0.20 : 0.14);
 
       var walkT = elapsed || 0;
-      if (blockerType === 'elephant' && convoyMembers.length) {
+      if (isElephant) {
         barrierGroup.visible = false;
         elephantConvoy.visible = true;
-        var crossOffset = Math.sin(walkT * 0.75) * 1.15;
-        var crossDir = Math.cos(walkT * 0.75) >= 0 ? 1 : -1;
+        var roadScale = Math.min(1, streetWidth(blockerTurn.distance) / 4.35);
+        var scaleFactor = 0.78 + 0.22 * roadScale;
+        var crossOffset = Math.sin(walkT * 0.7) * 0.42 * roadScale;
+        var crossDir = Math.cos(walkT * 0.7) >= 0 ? 1 : -1;
         for (var mi = 0; mi < convoyMembers.length; mi++) {
           var m = convoyMembers[mi];
-          m.el.position.set(m.x + crossOffset, 0, m.z);
+          m.el.scale.setScalar(m.baseScale * scaleFactor);
+          m.el.position.set(m.baseX * roadScale + crossOffset, 0, m.baseZ * scaleFactor);
           m.el.rotation.y = crossDir > 0 ? Math.PI / 2 : -Math.PI / 2;
           window.StreetElephant.animateElephant(m.el, walkT + m.phase, showMissed ? 'startle' : 'walk');
         }
@@ -315,6 +325,8 @@ window.StreetRoute = (function () {
     var nextTurn = 0;
     var chosen = false;
     var resultTurn = null;
+    var trumpetTurn = null;
+    var trumpetStage = 0;
     var hint = document.createElement('div');
     hint.className = 'street-turn';
     hint.hidden = true;
@@ -518,6 +530,8 @@ window.StreetRoute = (function () {
       while (nextTurn < routeTurns.length && routeTurns[nextTurn].distance + TURN_GRACE <= (distance || 0)) nextTurn++;
       chosen = false;
       resultTurn = null;
+      trumpetTurn = null;
+      trumpetStage = 0;
       banner.hidden = true;
       updateHint(distance);
     }
@@ -533,6 +547,20 @@ window.StreetRoute = (function () {
 
     function update(distance, missed, turned) {
       var turn = routeTurns[nextTurn];
+      if (turn && turn.blocker === 'elephant') {
+        if (trumpetTurn !== turn) {
+          trumpetTurn = turn;
+          trumpetStage = 0;
+        }
+        if (trumpetStage < 1 && distance >= turn.distance - NOTICE) {
+          trumpetStage = 1;
+          if (window.AppAudio) window.AppAudio.playVoice('daxiang');
+        }
+        if (trumpetStage < 2 && distance >= turn.distance - TURN_WINDOW) {
+          trumpetStage = 2;
+          if (window.AppAudio) window.AppAudio.playVoiceChain('daxiang', 2, 520);
+        }
+      }
       if (turn && distance >= turn.distance + TURN_GRACE) {
         var confirmed = chosen;
         resultTurn = { turn: turn, confirmed: confirmed };

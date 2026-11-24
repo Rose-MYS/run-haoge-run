@@ -61,7 +61,7 @@ window.AppAudio = (function () {
     { key: 'sarilang', label: '萨日朗！', trigger: '撞障 / 路过大妈', file: 'assets/audio/haoge-sarilang.mp3', keywords: ['萨日朗', 'sarilang'], stack: 1 },
     { key: 'ending', label: '结尾原声', trigger: '无尽模式结尾骑车离开', file: 'assets/audio/ending-scene.mp3', keywords: ['结尾', 'ending'], stack: 1 },
     { key: 'shengua', label: '生瓜蛋子！', trigger: '随机台词', file: 'assets/audio/haoge-shengguadanzi.mp3', keywords: ['生瓜', 'shengguadanzi'], stack: 1 },
-    { key: 'daxiang', label: '大象叫（大招）', trigger: '释放保熟技能', file: 'assets/audio/haoge-daxiang.mp3', keywords: ['大象', 'daxiang'], stack: 1 },
+    { key: 'daxiang', label: '大象叫（大招）', trigger: '释放保熟技能 / 过路大象转弯', file: 'assets/audio/haoge-daxiang.mp3', keywords: ['大象', 'daxiang'], stack: 3 },
     { key: 'aihuaqiang', label: '哎华强！', trigger: '路边一家三口（60%）', file: 'assets/audio/bystander-aihuaqiang.mp3', keywords: ['哎华强', 'aihuaqiang'], stack: 1 },
     { key: 'huaqiang', label: '华强！', trigger: '路边一家三口（30%）', file: 'assets/audio/bystander-huaqiang.mp3', keywords: ['bystander-huaqiang'], stack: 1 },
     { key: 'huaihua', label: '华强！哎华强！', trigger: '路边一家三口（10%）', file: 'assets/audio/bystander-huaqiang-aihuaqiang.mp3', keywords: ['huaihua'], stack: 1 },
@@ -229,7 +229,7 @@ window.AppAudio = (function () {
   registerVoice('sarilang', 'assets/audio/haoge-sarilang.mp3');
   registerVoice('ending', 'assets/audio/ending-scene.mp3');
   registerVoice('shengua', 'assets/audio/haoge-shengguadanzi.mp3');
-  registerVoice('daxiang', 'assets/audio/haoge-daxiang.mp3');
+  registerVoice('daxiang', 'assets/audio/haoge-daxiang.mp3', 3);
   registerVoice('aihuaqiang', 'assets/audio/bystander-aihuaqiang.mp3');
   registerVoice('huaqiang', 'assets/audio/bystander-huaqiang.mp3');
   registerVoice('huaihua', 'assets/audio/bystander-huaqiang-aihuaqiang.mp3');

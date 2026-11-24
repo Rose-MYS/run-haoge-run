@@ -1448,16 +1448,18 @@
       chaser.position.x = fromX + (toX - fromX) * e;
       chaser.position.z = fromZ + (toZ - fromZ) * e;
       chaser.position.y = 0;
-      huaQiang.rotation.y = Math.PI + Math.atan2(toX - fromX, fromZ - toZ) * 0.28;
+      var dashTurnStart = CONFIG.piguaDashTime * 0.65;
+      var turnBlend = rel > dashTurnStart ? easeInOut(Math.min(1, (rel - dashTurnStart) / (CONFIG.piguaDashTime - dashTurnStart))) : 0;
+      var dashYaw = Math.PI + Math.atan2(toX - fromX, fromZ - toZ) * 0.25;
+      var targetYaw = Math.atan2(tp.x - chaser.position.x, 0.7);
+      huaQiang.rotation.y = dashYaw * (1 - turnBlend) + targetYaw * turnBlend;
       huaQiang.rotation.x = 0;
       piguaSlashArc.visible = false;
       if (ua && ua.isGLB && window.RunnerAnim) {
         window.RunnerAnim.play(huaQiang, 'run', { timeScale: 1.55 });
         if (ua.clearRigPose) ua.clearRigPose();
-        if (ua.spine) ua.spine.rotation.x = 0.14;
-        if (ua.chest) ua.chest.rotation.x = 0.08;
-        if (ua.rightArm) ua.rightArm.rotation.x = -0.45;
-        if (ua.rightForeArm) ua.rightForeArm.rotation.x = -0.78;
+        if (ua.spine) ua.spine.rotation.x = 0.08;
+        if (ua.rightForeArm) ua.rightForeArm.rotation.x = -0.58;
         huaQiang.position.y = 0;
       } else if (ua && ua.rightArm) {
         var ph = S.time * 26;
@@ -1475,6 +1477,7 @@
     chaser.position.z = tp.z - 0.7;
     chaser.position.y = 0;
     huaQiang.rotation.y = Math.atan2(tp.x - chaser.position.x, 0.7);
+    huaQiang.rotation.x = 0;
     huaQiang.position.y = 0;
     if (ua && ua.isGLB && window.RunnerAnim) {
       window.RunnerAnim.freeze(huaQiang);
@@ -1486,47 +1489,48 @@
       var rpE = easeInOut(rp);
       piguaSlashArc.visible = false;
       if (ua && ua.rightArm) {
-        ua.rightArm.rotation.x = -2.05 * rpE;
-        ua.rightArm.rotation.z = -0.25 * rpE;
-        if (ua.rightForeArm) ua.rightForeArm.rotation.x = -0.85 * rpE;
-        ua.leftArm.rotation.x = 0.45 * rpE;
-        if (ua.leftForeArm) ua.leftForeArm.rotation.x = -0.45 * rpE;
+        ua.rightArm.rotation.x = -2.25 * rpE;
+        ua.rightArm.rotation.z = -0.18 * rpE;
+        if (ua.rightForeArm) ua.rightForeArm.rotation.x = -0.95 * rpE;
+        ua.leftArm.rotation.x = -0.35 * rpE;
+        if (ua.leftForeArm) ua.leftForeArm.rotation.x = -0.55 * rpE;
         if (ua.spine) {
-          ua.spine.rotation.y = -0.24 * rpE;
-          ua.spine.rotation.x = -0.10 * rpE;
+          ua.spine.rotation.y = -0.22 * rpE;
+          ua.spine.rotation.x = -0.05 * rpE;
         }
-        if (ua.chest) ua.chest.rotation.y = -0.22 * rpE;
-        ua.leftLeg.rotation.x = -0.36 * rpE;
-        if (ua.leftKnee) ua.leftKnee.rotation.x = 0.48 * rpE;
+        if (ua.chest) ua.chest.rotation.y = -0.18 * rpE;
+        ua.leftLeg.rotation.x = -0.32 * rpE;
+        if (ua.leftKnee) ua.leftKnee.rotation.x = 0.36 * rpE;
         ua.rightLeg.rotation.x = 0.28 * rpE;
-        if (ua.rightKnee) ua.rightKnee.rotation.x = 0.24 * rpE;
+        if (ua.rightKnee) ua.rightKnee.rotation.x = 0.22 * rpE;
       }
-      huaQiang.rotation.x = -0.06 * rpE;
       PIGUA.flinch = Math.min(1, rpE * 1.2);
     } else if (rel < CONFIG.piguaSwingTime) {
       var sp = Math.min(1, Math.max(0, (rel - CONFIG.piguaRaiseTime) / (CONFIG.piguaSwingTime - CONFIG.piguaRaiseTime)));
       var spE = easeIn(sp);
       if (ua && ua.rightArm) {
-        ua.rightArm.rotation.x = -2.05 + 2.95 * spE;
-        ua.rightArm.rotation.z = -0.25 + 0.42 * spE;
-        if (ua.rightForeArm) ua.rightForeArm.rotation.x = -0.85 + 0.65 * spE;
-        ua.leftArm.rotation.x = 0.45 - 0.85 * spE;
-        if (ua.leftForeArm) ua.leftForeArm.rotation.x = -0.45;
+        ua.rightArm.rotation.x = -2.25 + 1.65 * spE;
+        ua.rightArm.rotation.z = -0.18 + 0.26 * spE;
+        if (ua.rightForeArm) ua.rightForeArm.rotation.x = -0.95 + 0.65 * spE;
+        ua.leftArm.rotation.x = -0.35 + 0.70 * spE;
+        if (ua.leftForeArm) ua.leftForeArm.rotation.x = -0.65;
         if (ua.spine) {
-          ua.spine.rotation.y = -0.24 + 0.54 * spE;
-          ua.spine.rotation.x = -0.10 + 0.42 * spE;
+          ua.spine.rotation.y = -0.22 + 0.44 * spE;
+          ua.spine.rotation.x = -0.05 + 0.32 * spE;
         }
-        if (ua.chest) ua.chest.rotation.y = -0.22 + 0.44 * spE;
-        ua.leftLeg.rotation.x = -0.36 - 0.18 * spE;
-        if (ua.leftKnee) ua.leftKnee.rotation.x = 0.48 + 0.20 * spE;
-        ua.rightLeg.rotation.x = 0.28 + 0.14 * spE;
-        if (ua.rightKnee) ua.rightKnee.rotation.x = 0.24;
+        if (ua.chest) {
+          ua.chest.rotation.y = -0.18 + 0.34 * spE;
+          ua.chest.rotation.x = 0.14 * spE;
+        }
+        ua.leftLeg.rotation.x = -0.32 - 0.16 * spE;
+        if (ua.leftKnee) ua.leftKnee.rotation.x = 0.36 + 0.24 * spE;
+        ua.rightLeg.rotation.x = 0.28 + 0.10 * spE;
+        if (ua.rightKnee) ua.rightKnee.rotation.x = 0.22;
       }
       piguaSlashArc.visible = true;
-      piguaSlashArc.position.set(tp.x + 0.15, 1.05 - spE * 0.45, tp.z - 0.15);
-      piguaSlashArc.rotation.set(0.35, -0.3, 0.85 - spE * 1.9);
+      piguaSlashArc.position.set(tp.x + 0.12, 1.0 - spE * 0.48, tp.z - 0.12);
+      piguaSlashArc.rotation.set(0.35, -0.28, 0.82 - spE * 1.85);
       piguaSlashMat.opacity = Math.sin(sp * Math.PI) * 0.88;
-      huaQiang.rotation.x = -0.06 + 0.14 * spE;
       PIGUA.flinch = 1;
       if (!PIGUA.splitDone && rel >= CONFIG.piguaImpactTime) {
         PIGUA.splitDone = true;
@@ -1538,22 +1542,24 @@
     } else if (rel < CONFIG.piguaHoldTime) {
       piguaSlashArc.visible = false;
       if (ua && ua.rightArm) {
-        ua.rightArm.rotation.x = 0.90;
-        ua.rightArm.rotation.z = 0.17;
-        if (ua.rightForeArm) ua.rightForeArm.rotation.x = -0.20;
-        ua.leftArm.rotation.x = -0.40;
-        if (ua.leftForeArm) ua.leftForeArm.rotation.x = -0.45;
+        ua.rightArm.rotation.x = -0.60;
+        ua.rightArm.rotation.z = 0.08;
+        if (ua.rightForeArm) ua.rightForeArm.rotation.x = -0.30;
+        ua.leftArm.rotation.x = 0.35;
+        if (ua.leftForeArm) ua.leftForeArm.rotation.x = -0.65;
         if (ua.spine) {
-          ua.spine.rotation.y = 0.30;
-          ua.spine.rotation.x = 0.32;
+          ua.spine.rotation.y = 0.22;
+          ua.spine.rotation.x = 0.27;
         }
-        if (ua.chest) ua.chest.rotation.y = 0.22;
-        ua.leftLeg.rotation.x = -0.54;
-        if (ua.leftKnee) ua.leftKnee.rotation.x = 0.68;
-        ua.rightLeg.rotation.x = 0.42;
-        if (ua.rightKnee) ua.rightKnee.rotation.x = 0.24;
+        if (ua.chest) {
+          ua.chest.rotation.y = 0.16;
+          ua.chest.rotation.x = 0.14;
+        }
+        ua.leftLeg.rotation.x = -0.48;
+        if (ua.leftKnee) ua.leftKnee.rotation.x = 0.60;
+        ua.rightLeg.rotation.x = 0.38;
+        if (ua.rightKnee) ua.rightKnee.rotation.x = 0.22;
       }
-      huaQiang.rotation.x = 0.04;
       PIGUA.flinch = Math.max(0, 1 - (rel - (CONFIG.piguaHoldTime - 0.45)) / 0.45);
     } else {
       piguaSlashArc.visible = false;
@@ -1566,14 +1572,14 @@
       var re = easeOut(rp2);
       chaser.position.x = PIGUA.fromX + (player.position.x - PIGUA.fromX) * re;
       chaser.position.z = PIGUA.fromZ + (S.gap - PIGUA.fromZ) * re;
-      huaQiang.rotation.y = Math.PI;
+      var retTurn = easeInOut(Math.min(1, rp2 / 0.25));
+      huaQiang.rotation.y = Math.PI * retTurn;
       huaQiang.rotation.x = 0;
       if (ua && ua.isGLB && window.RunnerAnim) {
         window.RunnerAnim.play(huaQiang, 'run', { timeScale: 1.55 });
         if (ua.clearRigPose) ua.clearRigPose();
-        if (ua.spine) ua.spine.rotation.x = 0.10;
-        if (ua.rightArm) ua.rightArm.rotation.x = -0.35;
-        if (ua.rightForeArm) ua.rightForeArm.rotation.x = -0.68;
+        if (ua.spine) ua.spine.rotation.x = 0.08;
+        if (ua.rightForeArm) ua.rightForeArm.rotation.x = -0.55;
         huaQiang.position.y = 0;
       } else if (ua && ua.rightArm) {
         var ph2 = S.time * 24;
@@ -2993,6 +2999,40 @@
     if (S.perfectVoiceCd > 0) S.perfectVoiceCd = Math.max(0, S.perfectVoiceCd - dt);
     if (S.campaignCatchT > 0) {
       S.campaignCatchT -= dt;
+      var cp = Math.min(1, 1 - S.campaignCatchT / 1.15);
+      var cuCatch = huaQiang.userData;
+      chaser.position.x += (player.position.x - chaser.position.x) * Math.min(1, dt * 10);
+      chaser.position.z += ((player.position.z + 1.05) - chaser.position.z) * Math.min(1, dt * 10);
+      huaQiang.rotation.y = Math.PI;
+      huaQiang.rotation.x = 0;
+      if (cuCatch) {
+        if (window.RunnerAnim) window.RunnerAnim.freeze(huaQiang);
+        if (cuCatch.clearRigPose) cuCatch.clearRigPose();
+        if (cp < 0.38) {
+          var cw = easeOut(cp / 0.38);
+          if (cuCatch.spine) { cuCatch.spine.rotation.y = -0.22 * cw; cuCatch.spine.rotation.x = -0.04 * cw; }
+          if (cuCatch.rightArm) cuCatch.rightArm.rotation.x = -1.85 * cw;
+          if (cuCatch.rightForeArm) cuCatch.rightForeArm.rotation.x = -0.95 * cw;
+          if (cuCatch.leftArm) cuCatch.leftArm.rotation.x = -0.40 * cw;
+          if (cuCatch.leftForeArm) cuCatch.leftForeArm.rotation.x = -0.65 * cw;
+          if (cuCatch.leftLeg) cuCatch.leftLeg.rotation.x = -0.32 * cw;
+          if (cuCatch.leftKnee) cuCatch.leftKnee.rotation.x = 0.38 * cw;
+          if (cuCatch.rightLeg) cuCatch.rightLeg.rotation.x = 0.28 * cw;
+          if (cuCatch.rightKnee) cuCatch.rightKnee.rotation.x = 0.20 * cw;
+        } else {
+          var cs = easeIn(Math.min(1, (cp - 0.38) / 0.32));
+          if (cuCatch.spine) { cuCatch.spine.rotation.y = -0.22 + 0.48 * cs; cuCatch.spine.rotation.x = -0.04 + 0.26 * cs; }
+          if (cuCatch.chest) cuCatch.chest.rotation.x = 0.12 * cs;
+          if (cuCatch.rightArm) cuCatch.rightArm.rotation.x = -1.85 + 1.05 * cs;
+          if (cuCatch.rightForeArm) cuCatch.rightForeArm.rotation.x = -0.95 + 0.70 * cs;
+          if (cuCatch.leftArm) cuCatch.leftArm.rotation.x = -0.40 + 0.65 * cs;
+          if (cuCatch.leftForeArm) cuCatch.leftForeArm.rotation.x = -0.75;
+          if (cuCatch.leftLeg) cuCatch.leftLeg.rotation.x = -0.32 - 0.14 * cs;
+          if (cuCatch.leftKnee) cuCatch.leftKnee.rotation.x = 0.38 + 0.20 * cs;
+          if (cuCatch.rightLeg) cuCatch.rightLeg.rotation.x = 0.28 + 0.10 * cs;
+          if (cuCatch.rightKnee) cuCatch.rightKnee.rotation.x = 0.20;
+        }
+      }
       if (S.campaignCatchT <= 0) finishChapter('caught');
       return;
     }
@@ -3342,11 +3382,13 @@
     var ua = huaQiang.userData;
     var up = haoGe.userData;
     var ud = xiaoDiModel.userData;
+    var rushEnd = 0.35;
     if (window.RunnerAnim) {
       window.RunnerAnim.freeze(haoGe);
-      window.RunnerAnim.freeze(huaQiang);
+      if (T >= rushEnd) window.RunnerAnim.freeze(huaQiang);
       window.RunnerAnim.freeze(xiaoDiModel);
     }
+    if (ua && ua.clearRigPose) ua.clearRigPose();
 
     if (S.canSkipEnding && T >= CONFIG.endingSkipAt && !S.deathOverShown) {
       show('skipBtn');
@@ -3356,38 +3398,69 @@
       hide('skipHint');
     }
     /* ---- 华强冲刺 + 捅刀 ---- */
-    var rushEnd = 0.35;
     var p = Math.min(1, T / rushEnd);
     chaser.position.x = S.deathFromX + (player.position.x - S.deathFromX) * easeOut(p);
     chaser.position.z = S.deathFromZ + ((player.position.z + 1.05) - S.deathFromZ) * easeOut(p);
     if (T > rushEnd && T < 0.7) {
       var lp = (T - rushEnd) / 0.35;
-      chaser.position.z = player.position.z + 1.05 - 0.6 * easeIn(lp);
+      chaser.position.z = player.position.z + 1.05 - 0.52 * easeIn(lp);
     }
 
     if (T < rushEnd) {
-      var ph = S.time * 26;
-      ua.leftLeg.rotation.x = -Math.sin(ph) * 0.9;
-      ua.rightLeg.rotation.x = Math.sin(ph) * 0.9;
-      ua.leftArm.rotation.x = Math.sin(ph) * 0.9;
-      ua.rightArm.rotation.x = -Math.sin(ph) * 0.9;
       huaQiang.rotation.x = 0;
-      huaQiang.position.y = Math.abs(Math.sin(ph)) * 0.06;
+      if (ua && ua.isGLB && window.RunnerAnim) {
+        window.RunnerAnim.play(huaQiang, 'run', { timeScale: 1.55 });
+        if (ua.spine) ua.spine.rotation.x = 0.10;
+        if (ua.rightForeArm) ua.rightForeArm.rotation.x = -0.65;
+        huaQiang.position.y = 0;
+      } else {
+        var ph = S.time * 26;
+        ua.leftLeg.rotation.x = -Math.sin(ph) * 0.9;
+        ua.rightLeg.rotation.x = Math.sin(ph) * 0.9;
+        ua.leftArm.rotation.x = Math.sin(ph) * 0.9;
+        ua.rightArm.rotation.x = -Math.sin(ph) * 0.9;
+        huaQiang.position.y = Math.abs(Math.sin(ph)) * 0.06;
+      }
     } else if (T < 0.7) {
-      var sp = Math.sin(Math.min(1, (T - rushEnd) / 0.35) * Math.PI);
-      ua.leftLeg.rotation.x = -0.55;
-      ua.rightLeg.rotation.x = 0.65;
-      ua.leftArm.rotation.x = 1.25;
-      ua.rightArm.rotation.x = -1.75 * sp - 0.05;
-      huaQiang.rotation.x = -0.24 * sp;
+      var lp = (T - rushEnd) / 0.35;
+      huaQiang.rotation.x = 0;
       huaQiang.position.y = 0;
+      if (lp < 0.32) {
+        var w = easeOut(lp / 0.32);
+        if (ua.spine) { ua.spine.rotation.y = -0.22 * w; ua.spine.rotation.x = -0.04 * w; }
+        ua.rightArm.rotation.x = -1.85 * w;
+        if (ua.rightForeArm) ua.rightForeArm.rotation.x = -0.95 * w;
+        ua.leftArm.rotation.x = -0.40 * w;
+        if (ua.leftForeArm) ua.leftForeArm.rotation.x = -0.65 * w;
+        ua.leftLeg.rotation.x = -0.32 * w;
+        if (ua.leftKnee) ua.leftKnee.rotation.x = 0.38 * w;
+        ua.rightLeg.rotation.x = 0.28 * w;
+        if (ua.rightKnee) ua.rightKnee.rotation.x = 0.20 * w;
+      } else {
+        var s = easeIn(Math.min(1, (lp - 0.32) / 0.68));
+        if (ua.spine) { ua.spine.rotation.y = -0.22 + 0.48 * s; ua.spine.rotation.x = -0.04 + 0.26 * s; }
+        if (ua.chest) ua.chest.rotation.x = 0.12 * s;
+        ua.rightArm.rotation.x = -1.85 + 1.05 * s;
+        if (ua.rightForeArm) ua.rightForeArm.rotation.x = -0.95 + 0.70 * s;
+        ua.leftArm.rotation.x = -0.40 + 0.65 * s;
+        if (ua.leftForeArm) ua.leftForeArm.rotation.x = -0.75;
+        ua.leftLeg.rotation.x = -0.32 - 0.14 * s;
+        if (ua.leftKnee) ua.leftKnee.rotation.x = 0.38 + 0.20 * s;
+        ua.rightLeg.rotation.x = 0.28 + 0.10 * s;
+        if (ua.rightKnee) ua.rightKnee.rotation.x = 0.20;
+      }
     } else if (T < 1.55) {
       // 收刀站定，准备离开
-      ua.leftArm.rotation.x = 0.5;
-      ua.rightArm.rotation.x = -0.45;
+      if (ua.spine) ua.spine.rotation.x = 0.05;
+      ua.leftArm.rotation.x = 0.05;
+      if (ua.leftForeArm) ua.leftForeArm.rotation.x = -0.25;
+      ua.rightArm.rotation.x = -0.22;
+      if (ua.rightForeArm) ua.rightForeArm.rotation.x = -0.55;
       ua.leftLeg.rotation.x = 0;
+      if (ua.leftKnee) ua.leftKnee.rotation.x = 0.08;
       ua.rightLeg.rotation.x = 0;
-      huaQiang.rotation.x = -0.06;
+      if (ua.rightKnee) ua.rightKnee.rotation.x = 0.08;
+      huaQiang.rotation.x = 0;
       huaQiang.position.y = 0;
     } else if (T < 2.3) {
       // 走向电动车（车停在右侧）
@@ -3398,9 +3471,13 @@
       chaser.position.z = player.position.z + 1.9;
       huaQiang.rotation.y = Math.PI + (0 - Math.PI) * easeOut(pm);
       ua.leftLeg.rotation.x = -0.3;
+      if (ua.leftKnee) ua.leftKnee.rotation.x = 0.85 * easeIn(pm);
       ua.rightLeg.rotation.x = 0.3;
+      if (ua.rightKnee) ua.rightKnee.rotation.x = 0.85 * easeIn(pm);
       ua.leftArm.rotation.x = -0.4;
+      if (ua.leftForeArm) ua.leftForeArm.rotation.x = -0.35;
       ua.rightArm.rotation.x = -0.4;
+      if (ua.rightForeArm) ua.rightForeArm.rotation.x = -0.35;
       huaQiang.rotation.x = 0;
       huaQiang.position.y = -0.94 * easeIn(pm);
     } else {
@@ -3418,9 +3495,13 @@
       huaQiang.rotation.y = 0;
       huaQiang.position.y = -0.94;
       ua.leftLeg.rotation.x = -1.15;
+      if (ua.leftKnee) ua.leftKnee.rotation.x = 1.05;
       ua.rightLeg.rotation.x = -1.15;
+      if (ua.rightKnee) ua.rightKnee.rotation.x = 1.05;
       ua.leftArm.rotation.x = -1.35;
+      if (ua.leftForeArm) ua.leftForeArm.rotation.x = -0.35;
       ua.rightArm.rotation.x = -1.35;
+      if (ua.rightForeArm) ua.rightForeArm.rotation.x = -0.35;
       huaQiang.rotation.x = 0.1;
     }
 
@@ -3806,13 +3887,21 @@
     } else if (!PIGUA.active) {
       if (S.mode === 'playing' && S.lastChanceT > 0) {
         // 濒死演出：华强举刀扑近身
-        if (huaQiang.userData) {
-          huaQiang.userData.leftLeg.rotation.x = -0.55;
-          huaQiang.userData.rightLeg.rotation.x = 0.6;
-          huaQiang.userData.leftArm.rotation.x = 1.15;
-          huaQiang.userData.rightArm.rotation.x = -1.65;
+        var cuLast = huaQiang.userData;
+        if (cuLast && cuLast.isGLB && window.RunnerAnim) window.RunnerAnim.freeze(huaQiang);
+        if (cuLast) {
+          if (cuLast.clearRigPose) cuLast.clearRigPose();
+          if (cuLast.spine) cuLast.spine.rotation.x = 0.16;
+          cuLast.leftLeg.rotation.x = -0.35;
+          if (cuLast.leftKnee) cuLast.leftKnee.rotation.x = 0.42;
+          cuLast.rightLeg.rotation.x = 0.30;
+          if (cuLast.rightKnee) cuLast.rightKnee.rotation.x = 0.20;
+          cuLast.leftArm.rotation.x = -0.35;
+          if (cuLast.leftForeArm) cuLast.leftForeArm.rotation.x = -0.65;
+          cuLast.rightArm.rotation.x = -1.75;
+          if (cuLast.rightForeArm) cuLast.rightForeArm.rotation.x = -0.85;
         }
-        huaQiang.rotation.x = -0.22;
+        huaQiang.rotation.x = 0;
       } else {
         huaQiang.rotation.x = 0;
         if (huaQiang.userData && huaQiang.userData.isGLB) {
@@ -3821,10 +3910,8 @@
           if (S.mode === 'playing' || S.mode === 'menu') {
             var runScale = S.mode === 'menu' ? 0.65 : Math.max(0.85, (S.speed || CONFIG.baseSpeed) / CONFIG.baseSpeed * 1.05);
             window.RunnerAnim.play(huaQiang, 'run', { timeScale: runScale });
-            if (cu.spine) cu.spine.rotation.x = 0.08;
-            if (cu.chest) cu.chest.rotation.x = 0.06;
-            if (cu.rightArm) cu.rightArm.rotation.x = -0.35;
-            if (cu.rightForeArm) cu.rightForeArm.rotation.x = -0.65;
+            if (cu.spine) cu.spine.rotation.x = 0.06;
+            if (cu.rightForeArm) cu.rightForeArm.rotation.x = -0.55;
           } else {
             window.RunnerAnim.freeze(huaQiang);
           }
