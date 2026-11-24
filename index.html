@@ -6,7 +6,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 <title>郝哥快跑 · 这瓜保熟吗？</title>
 <link rel="stylesheet" href="css/style.css">
-<link rel="stylesheet" href="css/street-ui.css?v=4">
+<link rel="stylesheet" href="css/street-ui.css?v=5">
 <script>
   window.HAOGE_SOURCE_ONLY = true;
   window.HAOGE_ENABLE_VOICES = true;
@@ -95,6 +95,7 @@
     <h1 class="title">郝哥快跑</h1>
     <div class="subtitle">这瓜保熟吗？</div>
     <div class="best-line">历史最高 <span id="bestStart">0</span></div>
+    <div id="careerSummary" class="career-summary"></div>
     <button id="startBtn" class="btn">开始跑！</button>
     <div class="menu-sub-actions">
       <button id="eggBtn" class="btn btn-small">彩蛋图鉴</button>
@@ -108,7 +109,8 @@
 
 <div id="eggModal" class="screen hidden">
   <div class="panel egg-panel">
-    <h2 class="egg-title">彩蛋图鉴</h2>
+    <h2 class="egg-title">彩蛋图鉴 · 生涯战绩</h2>
+    <div id="careerGrid" class="career-grid"></div>
     <div id="eggProgress" class="egg-progress"></div>
     <div id="eggGrid" class="egg-grid"></div>
     <button id="eggClose" class="btn btn-small">返回</button>
@@ -197,7 +199,12 @@
 <div id="voiceModal" class="screen hidden">
   <div class="panel voice-panel">
     <h2 class="egg-title">语音包管理</h2>
-    <p class="voice-sub">支持试听与上传本地音频（MP3/WAV/OGG/M4A）替换任意台词，保存于本机浏览器。</p>
+    <p class="voice-sub">支持试听、单条替换与批量导入本地音频（MP3/WAV/OGG/M4A），保存于本机浏览器。</p>
+    <div class="voice-batch-bar">
+      <button id="voiceBatchBtn" type="button" class="btn btn-small">批量导入音频</button>
+      <span id="voiceBatchStatus" class="voice-trig"></span>
+      <input id="voiceBatchInput" type="file" multiple accept="audio/*,.mp3,.wav,.ogg,.m4a" hidden>
+    </div>
     <div id="voiceList" class="voice-list"></div>
     <div class="voice-actions">
       <button id="voiceResetAll" class="btn btn-small">全部恢复默认</button>
@@ -217,7 +224,7 @@
 <script src="js/vendor/three.min.js?v=3"></script>
 <script src="js/vendor/GLTFLoader.js?v=3"></script>
 <script src="js/config.js?v=3"></script>
-<script src="js/audio.js?v=5"></script>
+<script src="js/audio.js?v=6"></script>
 <script src="js/characters.js?v=4"></script>
 <script src="js/toon.js?v=3"></script>
 <script>
@@ -242,6 +249,8 @@
 <script src="js/street-cast.js?v=1"></script>
 <script src="js/street-bgm.js?v=1"></script>
 <script src="js/street-feedback.js?v=1"></script>
-<script src="js/game.js?v=8"></script>
+<script src="js/legacy-scenery.js?v=1"></script>
+<script src="js/ui-modals.js?v=1"></script>
+<script src="js/game.js?v=9"></script>
 </body>
 </html>

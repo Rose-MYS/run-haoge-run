@@ -52,19 +52,24 @@ window.AppAudio = (function () {
   } catch (e) { customVoices = {}; }
 
   var VOICE_META = [
-    { key: 'baoshu', label: '这瓜保熟吗？', trigger: '开局 / 捡保熟卡 / 被抓', file: 'assets/audio/huaqiang-baoshu.mp3', stack: 1 },
-    { key: 'zhaocha', label: '我看你是故意找茬', trigger: '随机挑衅台词', file: 'assets/audio/huaqiang-zhaocha.mp3', stack: 1 },
-    { key: 'haogeZhaocha', label: '你是故意找茬是不是？', trigger: '劈瓜演出郝哥回应', file: 'assets/audio/haoge-zhaocha.mp3', stack: 1 },
-    { key: 'pigua', label: '你劈我瓜是吧？', trigger: '华强劈瓜演出', file: 'assets/audio/huaqiang-pigua.mp3', stack: 1 },
-    { key: 'jinxigua', label: '金西瓜！', trigger: '吃到金西瓜（支持连击）', file: 'assets/audio/huaqiang-jinxigua.mp3', stack: 6 },
-    { key: 'scream', label: '郝哥惨叫', trigger: '无尽模式被抓捅刀瞬间', file: 'assets/audio/haoge-canjiao.mp3', stack: 1 },
-    { key: 'sarilang', label: '萨日朗！', trigger: '撞障 / 路过大妈', file: 'assets/audio/haoge-sarilang.mp3', stack: 1 },
-    { key: 'ending', label: '结尾原声', trigger: '无尽模式结尾骑车离开', file: 'assets/audio/ending-scene.mp3', stack: 1 },
-    { key: 'shengua', label: '生瓜蛋子！', trigger: '随机台词', file: 'assets/audio/haoge-shengguadanzi.mp3', stack: 1 },
-    { key: 'daxiang', label: '大象叫（大招）', trigger: '释放保熟技能', file: 'assets/audio/haoge-daxiang.mp3', stack: 1 },
-    { key: 'aihuaqiang', label: '哎华强！', trigger: '路边一家三口（60%）', file: 'assets/audio/bystander-aihuaqiang.mp3', stack: 1 },
-    { key: 'huaqiang', label: '华强！', trigger: '路边一家三口（30%）', file: 'assets/audio/bystander-huaqiang.mp3', stack: 1 },
-    { key: 'huaihua', label: '华强！哎华强！', trigger: '路边一家三口（10%）', file: 'assets/audio/bystander-huaqiang-aihuaqiang.mp3', stack: 1 },
+    { key: 'baoshu', label: '这瓜保熟吗？', trigger: '开局 / 捡保熟卡 / 被抓', file: 'assets/audio/huaqiang-baoshu.mp3', keywords: ['保熟', 'baoshu'], stack: 1 },
+    { key: 'zhaocha', label: '我看你是故意找茬', trigger: '随机挑衅台词', file: 'assets/audio/huaqiang-zhaocha.mp3', keywords: ['故意找茬', 'zhaocha'], stack: 1 },
+    { key: 'haogeZhaocha', label: '你是故意找茬是不是？', trigger: '劈瓜演出郝哥回应', file: 'assets/audio/haoge-zhaocha.mp3', keywords: ['找茬是不是', 'haoge-zhaocha'], stack: 1 },
+    { key: 'pigua', label: '你劈我瓜是吧？', trigger: '华强劈瓜演出', file: 'assets/audio/huaqiang-pigua.mp3', keywords: ['劈瓜', 'pigua'], stack: 1 },
+    { key: 'jinxigua', label: '金西瓜！', trigger: '吃到金西瓜（支持连击）', file: 'assets/audio/huaqiang-jinxigua.mp3', keywords: ['金西瓜', 'jinxigua'], stack: 6 },
+    { key: 'scream', label: '郝哥惨叫', trigger: '无尽模式被抓捅刀瞬间', file: 'assets/audio/haoge-canjiao.mp3', keywords: ['惨叫', 'canjiao', 'scream'], stack: 1 },
+    { key: 'sarilang', label: '萨日朗！', trigger: '撞障 / 路过大妈', file: 'assets/audio/haoge-sarilang.mp3', keywords: ['萨日朗', 'sarilang'], stack: 1 },
+    { key: 'ending', label: '结尾原声', trigger: '无尽模式结尾骑车离开', file: 'assets/audio/ending-scene.mp3', keywords: ['结尾', 'ending'], stack: 1 },
+    { key: 'shengua', label: '生瓜蛋子！', trigger: '随机台词', file: 'assets/audio/haoge-shengguadanzi.mp3', keywords: ['生瓜', 'shengguadanzi'], stack: 1 },
+    { key: 'daxiang', label: '大象叫（大招）', trigger: '释放保熟技能', file: 'assets/audio/haoge-daxiang.mp3', keywords: ['大象', 'daxiang'], stack: 1 },
+    { key: 'aihuaqiang', label: '哎华强！', trigger: '路边一家三口（60%）', file: 'assets/audio/bystander-aihuaqiang.mp3', keywords: ['哎华强', 'aihuaqiang'], stack: 1 },
+    { key: 'huaqiang', label: '华强！', trigger: '路边一家三口（30%）', file: 'assets/audio/bystander-huaqiang.mp3', keywords: ['bystander-huaqiang'], stack: 1 },
+    { key: 'huaihua', label: '华强！哎华强！', trigger: '路边一家三口（10%）', file: 'assets/audio/bystander-huaqiang-aihuaqiang.mp3', keywords: ['huaihua'], stack: 1 },
+    { key: 'zhanzhu', label: '站住！别跑！', trigger: '开局镜头切入追逐', file: 'assets/audio/huaqiang-zhaocha.mp3', keywords: ['站住', 'zhanzhu'], stack: 1 },
+    { key: 'paobudiao', label: '你跑不掉的！', trigger: '华强逼近红光预警', file: 'assets/audio/huaqiang-baoshu.mp3', keywords: ['跑不掉', 'paobudiao'], stack: 1 },
+    { key: 'haogeBaoshu', label: '这瓜保熟，不熟不要钱！', trigger: '绿灯完美转弯确认', file: 'assets/audio/haoge-shengguadanzi.mp3', keywords: ['不要钱', 'haogebaoshu'], stack: 1 },
+    { key: 'kuaipao', label: '快跑啊！', trigger: '分段波次提速冲刺', file: 'assets/audio/haoge-sarilang.mp3', keywords: ['快跑', 'kuaipao'], stack: 1 },
+    { key: 'victory', label: '逃出去了！保熟！', trigger: '分段过关冲过出口', file: 'assets/audio/huaqiang-jinxigua.mp3', keywords: ['逃出', '过关', 'victory'], stack: 1 },
   ];
 
   function saveCustomVoices() {
@@ -139,7 +144,7 @@ window.AppAudio = (function () {
     for (var i = 0; i < VOICE_META.length; i++) {
       var m = VOICE_META[i];
       out.push({
-        key: m.key, label: m.label, trigger: m.trigger,
+        key: m.key, label: m.label, trigger: m.trigger, keywords: m.keywords,
         custom: !!customVoices[m.key],
         ready: !!(voiceRegistry[m.key] && voiceRegistry[m.key].els.length),
       });
@@ -227,6 +232,11 @@ window.AppAudio = (function () {
   registerVoice('aihuaqiang', 'assets/audio/bystander-aihuaqiang.mp3');
   registerVoice('huaqiang', 'assets/audio/bystander-huaqiang.mp3');
   registerVoice('huaihua', 'assets/audio/bystander-huaqiang-aihuaqiang.mp3');
+  registerVoice('zhanzhu', 'assets/audio/huaqiang-zhaocha.mp3');
+  registerVoice('paobudiao', 'assets/audio/huaqiang-baoshu.mp3');
+  registerVoice('haogeBaoshu', 'assets/audio/haoge-shengguadanzi.mp3');
+  registerVoice('kuaipao', 'assets/audio/haoge-sarilang.mp3');
+  registerVoice('victory', 'assets/audio/huaqiang-jinxigua.mp3');
 
   return {
     ensure: ensure,
