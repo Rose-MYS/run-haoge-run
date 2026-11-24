@@ -589,6 +589,22 @@
   flex-direction: column;
   justify-content: space-between;
   pointer-events: auto;
+  opacity: 1;
+  transform: scale(1);
+  transition: opacity 0.8s cubic-bezier(0.22, 1, 0.36, 1), transform 0.8s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.prequel-overlay.is-closing {
+  opacity: 0;
+  transform: scale(1.045);
+  pointer-events: none;
+}
+.prequel-overlay.is-closing .prequel-top {
+  transform: translateY(-28px);
+  opacity: 0;
+}
+.prequel-overlay.is-closing .prequel-bottom {
+  transform: translateY(28px);
+  opacity: 0;
 }
 .prequel-overlay.hidden { display: none; }
 #prequelCanvas {
@@ -648,6 +664,7 @@
   padding: 14px clamp(14px, 3vw, 28px);
   color: #fff6de;
   font-family: system-ui, -apple-system, "PingFang SC", sans-serif;
+  transition: transform 0.55s ease, opacity 0.55s ease;
 }
 .prequel-top {
   background: linear-gradient(180deg, rgba(10, 18, 15, 0.88) 0%, rgba(10, 18, 15, 0) 100%);

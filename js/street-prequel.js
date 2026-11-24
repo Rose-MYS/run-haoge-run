@@ -1,7 +1,8 @@
 // ═══════════════════════════════════════════════════════════════
 //  STREET-PREQUEL.JS — 双模高精度《华强买瓜》5 幕前情提要过场
-//  · 下载 16MB 高精度 GLB 期间：零粗糙方块人，秒播 AI 复古电影分镜 + 原剧原声
-//  · GLB 模型就绪后 / 重看模式：直接复用跑酷同款高精度 GLB 郝哥 & 刘华强实时 3D 演绎
+//  · 下载 16MB 高精度 GLB 期间：秒播 AI 复古电影分镜 + 原剧原声
+//  · GLB 就绪后 / 3D 真模型模式：跑酷同款高精度 GLB 角色 + 精细化纹理东街瓜摊舞台
+//  · 结束与跳过采用电影级淡出缩放平滑过渡到游戏主界面（无生硬硬切）
 // ═══════════════════════════════════════════════════════════════
 (function () {
   'use strict';
@@ -29,6 +30,8 @@
   var lastFrameMs = 0;
   var elapsed = 0;
   var isOpen = false;
+  var isClosing = false;
+  var closeTimer = 0;
   var openMode = 'loading'; // 'loading' | 'firstVisit' | 'replay'
   var visualMode = 'storyboard'; // 'storyboard' | 'glb3d'
   var ready = false;
@@ -60,83 +63,343 @@
     { at: 13.0, act: 3, speaker: '郝哥', text: '你他妈劈我瓜是吧？！', voice: 'pigua' },
     { at: 15.8, act: 4, speaker: '郝哥', text: '萨日朗！！！快跑啊！', voice: 'sarilang' }
   ];
-  var TOTAL_DUR = 19.5;
+  var TOTAL_DUR = 19.8;
+  var FADE_OUT_AT = 18.8;
 
   function makeMat(color, opts) {
     opts = opts || {};
     return new THREE.MeshLambertMaterial(Object.assign({ color: color }, opts));
   }
 
+  // ── 程序化高清 Canvas 贴图生成器（西瓜条纹/生瓜瓤/木板/砖墙/刻度盘/路面）──
+  function makeCanvasTex(w, h, drawFn, repeatX, repeatY) {
+    var c = document.createElement('canvas');
+    c.width = w;
+    c.height = h;
+    drawFn(c.getContext('2d'), w, h);
+    var tex = new THREE.CanvasTexture(c);
+    tex.encoding = THREE.sRGBEncoding;
+    if (repeatX || repeatY) {
+      tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+      tex.repeat.set(repeatX || 1, repeatY || 1);
+    }
+    return tex;
+  }
+
+  function makeMelonTex() {
+    return makeCanvasTex(256, 128, function (ctx, w, h) {
+      var grad = ctx.createLinearGradient(0, 0, 0, h);
+      grad.addColorStop(0, '#1f5e27');
+      grad.addColorStop(0.5, '#3b9a43');
+      grad.addColorStop(1, '#1d5524');
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, w, h);
+      // 锯齿深绿西瓜虎纹
+      ctx.fillStyle = '#123d18';
+      for (var s = 0; s < 10; s++) {
+        var bx = (s + 0.5) * (w / 10);
+        ctx.beginPath();
+        ctx.moveTo(bx - 5, 0);
+        for (var y = 0; y <= h; y += 12) {
+          var jag = (y % 24 === 0 ? 4 : -4);
+          ctx.lineTo(bx + 6 + jag, y);
+        }
+        for (var y2 = h; y2 >= 0; y2 -= 12) {
+          var jag2 = (y2 % 24 === 0 ? -3 : 3);
+          ctx.lineTo(bx - 6 + jag2, y2);
+        }
+        ctx.closePath();
+        ctx.fill();
+      }
+      // 细微浅绿斑点增加真实感
+      ctx.fillStyle = 'rgba(180, 235, 160, 0.14)';
+      for (var d = 0; d < 120; d++) {
+        ctx.fillRect((d * 37) % w, (d * 53) % h, 2, 2);
+      }
+    });
+  }
+
+  function makeFleshTex(ripe) {
+    return makeCanvasTex(128, 128, function (ctx, w, h) {
+      var cx = w / 2, cy = h / 2;
+      ctx.fillStyle = '#24662c';
+      ctx.fillRect(0, 0, w, h);
+      ctx.beginPath();
+      ctx.arc(cx, cy, 60, 0, Math.PI * 2);
+      ctx.fillStyle = '#d9edc2';
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(cx, cy, 52, 0, Math.PI * 2);
+      ctx.fillStyle = ripe ? '#df3b3b' : '#f2d8c9'; // 生瓜蛋子发白微粉
+      ctx.fill();
+      ctx.fillStyle = ripe ? '#1b1714' : '#e6e0d4';
+      for (var i = 0; i < 16; i++) {
+        var a = (i / 16) * Math.PI * 2;
+        var r = 24 + (i % 3) * 8;
+        ctx.beginPath();
+        ctx.ellipse(cx + Math.cos(a) * r, cy + Math.sin(a) * r, 3, 1.8, a, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    });
+  }
+
+  function makeWoodTex() {
+    return makeCanvasTex(256, 256, function (ctx, w, h) {
+      ctx.fillStyle = '#8b572e';
+      ctx.fillRect(0, 0, w, h);
+      for (var p = 0; p < 6; p++) {
+        var y = p * (h / 6);
+        ctx.fillStyle = p % 2 === 0 ? '#935d32' : '#7f4e27';
+        ctx.fillRect(0, y, w, h / 6 - 2);
+        ctx.fillStyle = '#4a2b14';
+        ctx.fillRect(0, y + h / 6 - 2, w, 2);
+        // 木纹细丝
+        ctx.fillStyle = 'rgba(55, 30, 12, 0.16)';
+        for (var g = 0; g < 8; g++) {
+          ctx.fillRect(0, y + 4 + g * 5, w, 1.5);
+        }
+        // 钉子点
+        ctx.fillStyle = '#332013';
+        ctx.fillRect(14, y + 18, 4, 4);
+        ctx.fillRect(w - 18, y + 18, 4, 4);
+      }
+    }, 1, 1);
+  }
+
+  function makeAwningTex() {
+    return makeCanvasTex(256, 128, function (ctx, w, h) {
+      for (var i = 0; i < 8; i++) {
+        ctx.fillStyle = i % 2 === 0 ? '#276749' : '#f1ebd8';
+        ctx.fillRect(i * (w / 8), 0, w / 8, h);
+      }
+      ctx.fillStyle = 'rgba(0,0,0,0.12)';
+      ctx.fillRect(0, h - 14, w, 14);
+    });
+  }
+
+  function makeBrickTex() {
+    return makeCanvasTex(256, 128, function (ctx, w, h) {
+      ctx.fillStyle = '#b7a999';
+      ctx.fillRect(0, 0, w, h);
+      var rows = 6, cols = 6;
+      var bh = h / rows, bw = w / cols;
+      for (var r = 0; r < rows; r++) {
+        var off = (r % 2) * (bw / 2);
+        for (var c = -1; c <= cols; c++) {
+          ctx.fillStyle = (r + c) % 3 === 0 ? '#8c3b2b' : ((r + c) % 2 === 0 ? '#9a4432' : '#7c3325');
+          ctx.fillRect(c * bw + off + 2, r * bh + 2, bw - 3, bh - 3);
+        }
+      }
+    }, 3, 1);
+  }
+
+  function makeTileTex() {
+    return makeCanvasTex(256, 256, function (ctx, w, h) {
+      ctx.fillStyle = '#b9b19f';
+      ctx.fillRect(0, 0, w, h);
+      ctx.strokeStyle = '#8b8373';
+      ctx.lineWidth = 3;
+      for (var i = 0; i <= 4; i++) {
+        ctx.beginPath(); ctx.moveTo(i * 64, 0); ctx.lineTo(i * 64, h); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(0, i * 64); ctx.lineTo(w, i * 64); ctx.stroke();
+      }
+    }, 2, 16);
+  }
+
+  function makeRoadTex() {
+    return makeCanvasTex(256, 256, function (ctx, w, h) {
+      ctx.fillStyle = '#3f454c';
+      ctx.fillRect(0, 0, w, h);
+      ctx.fillStyle = 'rgba(255,255,255,0.06)';
+      for (var i = 0; i < 260; i++) {
+        ctx.fillRect((i * 47) % w, (i * 83) % h, 3, 3);
+      }
+      ctx.fillStyle = '#e2d7b4';
+      ctx.fillRect(w / 2 - 4, 24, 8, 96);
+    }, 1, 10);
+  }
+
+  function makeDialTex() {
+    return makeCanvasTex(128, 128, function (ctx, w, h) {
+      var cx = 64, cy = 64;
+      ctx.fillStyle = '#f8fafc';
+      ctx.beginPath(); ctx.arc(cx, cy, 60, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = '#334155'; ctx.lineWidth = 6; ctx.stroke();
+      for (var i = 0; i < 16; i++) {
+        var a = (i / 16) * Math.PI * 2 - Math.PI / 2;
+        ctx.strokeStyle = i === 12 ? '#dc2626' : '#475569';
+        ctx.lineWidth = i % 4 === 0 ? 4 : 2;
+        ctx.beginPath();
+        ctx.moveTo(cx + Math.cos(a) * 40, cy + Math.sin(a) * 40);
+        ctx.lineTo(cx + Math.cos(a) * 53, cy + Math.sin(a) * 53);
+        ctx.stroke();
+      }
+      // 红色指针直指 15 斤
+      ctx.strokeStyle = '#dc2626'; ctx.lineWidth = 5;
+      ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(cx + 34, cy - 22); ctx.stroke();
+      ctx.fillStyle = '#1e293b'; ctx.beginPath(); ctx.arc(cx, cy, 6, 0, Math.PI * 2); ctx.fill();
+    });
+  }
+
   function makeScooter() {
     var g = new THREE.Group();
-    var bodyMat = makeMat(0x234c7a);
-    var darkMat = makeMat(0x1c222b);
-    var chromeMat = makeMat(0xcbd5e1);
-    var base = new THREE.Mesh(new THREE.BoxGeometry(0.62, 0.18, 1.48), bodyMat);
-    base.position.y = 0.30;
-    var seat = new THREE.Mesh(new THREE.BoxGeometry(0.48, 0.16, 0.62), darkMat);
-    seat.position.set(0, 0.72, -0.24);
-    var stem = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.96, 0.14), chromeMat);
-    stem.position.set(0, 0.72, 0.56);
-    stem.rotation.x = -0.18;
-    var bar = new THREE.Mesh(new THREE.BoxGeometry(0.76, 0.08, 0.08), darkMat);
-    bar.position.set(0, 1.15, 0.48);
-    var lamp = new THREE.Mesh(new THREE.SphereGeometry(0.11, 10, 8), makeMat(0xfef08a, { emissive: 0xfacc15, emissiveIntensity: 0.4 }));
-    lamp.position.set(0, 0.96, 0.62);
-    var wF = new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.24, 0.14, 14), darkMat);
-    wF.rotation.z = Math.PI / 2;
-    wF.position.set(0, 0.24, 0.60);
-    var wB = wF.clone();
-    wB.position.z = -0.56;
-    g.add(base, seat, stem, bar, lamp, wF, wB);
+    var bodyMat = makeMat(0x22466e);
+    var darkMat = makeMat(0x1b2028);
+    var chromeMat = makeMat(0xd6dee8);
+    var seatMat = makeMat(0x2a2421);
+
+    var deck = new THREE.Mesh(new THREE.BoxGeometry(0.60, 0.14, 1.46), bodyMat);
+    deck.position.y = 0.28;
+    deck.castShadow = true;
+    var rearBody = new THREE.Mesh(new THREE.BoxGeometry(0.56, 0.36, 0.72), bodyMat);
+    rearBody.position.set(0, 0.50, -0.34);
+    var frontShield = new THREE.Mesh(new THREE.BoxGeometry(0.58, 0.72, 0.20), bodyMat);
+    frontShield.position.set(0, 0.66, 0.56);
+    frontShield.rotation.x = -0.18;
+    var seat = new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.14, 0.62), seatMat);
+    seat.position.set(0, 0.74, -0.26);
+    var stem = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.06, 0.88, 10), chromeMat);
+    stem.position.set(0, 0.78, 0.54);
+    stem.rotation.x = -0.16;
+    var bar = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.78, 8), darkMat);
+    bar.rotation.z = Math.PI / 2;
+    bar.position.set(0, 1.18, 0.48);
+    var lamp = new THREE.Mesh(new THREE.SphereGeometry(0.11, 12, 10), makeMat(0xfef08a, { emissive: 0xfacc15, emissiveIntensity: 0.45 }));
+    lamp.position.set(0, 0.94, 0.66);
+    // 左右后视镜
+    [-0.32, 0.32].forEach(function (mx) {
+      var stalk = new THREE.Mesh(new THREE.CylinderGeometry(0.015, 0.015, 0.18, 6), chromeMat);
+      stalk.position.set(mx, 1.26, 0.48);
+      var mir = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.07, 0.03), darkMat);
+      mir.position.set(mx, 1.35, 0.48);
+      g.add(stalk, mir);
+    });
+    function makeWheel(z) {
+      var wg = new THREE.Group();
+      var tire = new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.24, 0.14, 16), darkMat);
+      tire.rotation.z = Math.PI / 2;
+      var rim = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.13, 0.16, 12), chromeMat);
+      rim.rotation.z = Math.PI / 2;
+      wg.add(tire, rim);
+      wg.position.set(0, 0.24, z);
+      return wg;
+    }
+    g.add(deck, rearBody, frontShield, seat, stem, bar, lamp, makeWheel(0.60), makeWheel(-0.56));
     return g;
   }
 
   function buildScene() {
     scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x9dc2c9);
-    scene.fog = new THREE.Fog(0xb9d1d1, 16, 54);
+    scene.background = new THREE.Color(0x9ec4cb);
+    scene.fog = new THREE.Fog(0xc4d4cb, 18, 56);
 
     camera = new THREE.PerspectiveCamera(44, 16 / 9, 0.1, 100);
     camera.position.set(0.6, 2.35, 6.2);
 
-    var hemi = new THREE.HemisphereLight(0xfff5e0, 0x4b5563, 1.05);
+    var hemi = new THREE.HemisphereLight(0xfff4d9, 0x565c66, 1.05);
     scene.add(hemi);
-    var sun = new THREE.DirectionalLight(0xfff0cc, 1.15);
-    sun.position.set(7, 12, 8);
+    var sun = new THREE.DirectionalLight(0xffebc2, 1.22);
+    sun.position.set(8, 13, 9);
     sun.castShadow = true;
     scene.add(sun);
 
-    var road = new THREE.Mesh(new THREE.PlaneGeometry(24, 68), makeMat(0x3b4046));
+    var roadTex = makeRoadTex();
+    var tileTex = makeTileTex();
+    var brickTex = makeBrickTex();
+    var woodTex = makeWoodTex();
+    var awningTex = makeAwningTex();
+    var melonTex = makeMelonTex();
+    var unripeTex = makeFleshTex(false);
+    var ripeTex = makeFleshTex(true);
+    var dialTex = makeDialTex();
+
+    // 柏油路面 + 地砖人行道 + 路缘石
+    var road = new THREE.Mesh(new THREE.PlaneGeometry(22, 72), new THREE.MeshLambertMaterial({ map: roadTex }));
     road.rotation.x = -Math.PI / 2;
     road.receiveShadow = true;
     scene.add(road);
 
-    var sidewalk = new THREE.Mesh(new THREE.BoxGeometry(5.6, 0.14, 68), makeMat(0xb6ae9c));
+    var sidewalk = new THREE.Mesh(new THREE.BoxGeometry(5.6, 0.14, 72), new THREE.MeshLambertMaterial({ map: tileTex }));
     sidewalk.position.set(-4.8, 0.07, 0);
     sidewalk.receiveShadow = true;
     scene.add(sidewalk);
 
-    // 东街砖墙商铺与雨棚
-    var shop = new THREE.Mesh(new THREE.BoxGeometry(4.0, 5.4, 15), makeMat(0xd6c3a5));
-    shop.position.set(-6.6, 2.7, -2.5);
+    var curb = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.16, 72), makeMat(0x9b9485));
+    curb.position.set(-2.0, 0.08, 0);
+    scene.add(curb);
+
+    // 东街红砖二层老建筑背景（带窗户、空调外机、电线杆与行道树）
+    var shop = new THREE.Mesh(new THREE.BoxGeometry(4.2, 5.8, 18), makeMat(0xd9c8ac));
+    shop.position.set(-6.8, 2.9, -2.5);
     scene.add(shop);
-    var brick = new THREE.Mesh(new THREE.BoxGeometry(4.08, 1.65, 15.08), makeMat(0x8c3b2b));
-    brick.position.set(-6.6, 0.82, -2.5);
+    var brick = new THREE.Mesh(new THREE.BoxGeometry(4.28, 1.75, 18.08), new THREE.MeshLambertMaterial({ map: brickTex }));
+    brick.position.set(-6.8, 0.88, -2.5);
     scene.add(brick);
-    var awning = new THREE.Mesh(new THREE.BoxGeometry(2.8, 0.12, 6.8), makeMat(0x2f6f4e));
-    awning.position.set(-3.55, 3.15, -1.2);
-    awning.rotation.z = -0.18;
-    scene.add(awning);
+    var cornice = new THREE.Mesh(new THREE.BoxGeometry(4.55, 0.24, 18.3), makeMat(0x7c4534));
+    cornice.position.set(-6.8, 5.75, -2.5);
+    scene.add(cornice);
+    // 二楼玻璃窗 + 窗框
+    var frameMat = makeMat(0x3a5347);
+    var glassMat = makeMat(0x6e8f96, { emissive: 0x1e3035, emissiveIntensity: 0.25 });
+    [-6.5, -3.5, -0.5, 2.5].forEach(function (wz) {
+      var winFrame = new THREE.Mesh(new THREE.BoxGeometry(0.16, 1.35, 1.15), frameMat);
+      winFrame.position.set(-4.68, 3.85, wz);
+      var winGlass = new THREE.Mesh(new THREE.BoxGeometry(0.18, 1.12, 0.94), glassMat);
+      winGlass.position.set(-4.67, 3.85, wz);
+      scene.add(winFrame, winGlass);
+    });
+    // 空调外机
+    var ac = new THREE.Mesh(new THREE.BoxGeometry(0.45, 0.56, 0.78), makeMat(0xe5e1d8));
+    ac.position.set(-4.52, 2.65, 2.2);
+    scene.add(ac);
+    // 电线杆 + 行道树
+    var pole = new THREE.Mesh(new THREE.CylinderGeometry(0.10, 0.13, 6.4, 8), makeMat(0x88857c));
+    pole.position.set(-2.25, 3.2, -5.8);
+    scene.add(pole);
+    var treeTrunk = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.22, 2.6, 8), makeMat(0x654321));
+    treeTrunk.position.set(-3.4, 1.3, 4.4);
+    var canopy1 = new THREE.Mesh(new THREE.SphereGeometry(1.15, 12, 10), makeMat(0x4b7f52));
+    canopy1.position.set(-3.4, 3.1, 4.4);
+    var canopy2 = new THREE.Mesh(new THREE.SphereGeometry(0.85, 10, 8), makeMat(0x5b9460));
+    canopy2.position.set(-2.9, 3.55, 3.9);
+    scene.add(treeTrunk, canopy1, canopy2);
 
-    // 瓜摊木桌
+    // ── 精细化西瓜摊（木板摊桌 + 4 根棚柱 + 绿白条纹遮阳棚 + 案板 + 竹筐 + 招牌）──
     var stall = new THREE.Group();
-    stall.position.set(-2.25, 0.14, -1.2);
-    var table = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.92, 3.8), makeMat(0x7c4d2b));
-    table.position.y = 0.46;
-    table.castShadow = true;
-    stall.add(table);
+    stall.position.set(-2.30, 0.14, -1.1);
+    var woodMat = new THREE.MeshLambertMaterial({ map: woodTex });
+    var darkWoodMat = makeMat(0x5b371b);
 
+    // 摊位主木柜 + 台面延伸沿 + 底部横撑
+    var counterBody = new THREE.Mesh(new THREE.BoxGeometry(1.36, 0.86, 3.8), woodMat);
+    counterBody.position.y = 0.43;
+    counterBody.castShadow = true;
+    counterBody.receiveShadow = true;
+    var counterTop = new THREE.Mesh(new THREE.BoxGeometry(1.62, 0.10, 4.04), woodMat);
+    counterTop.position.y = 0.91;
+    counterTop.castShadow = true;
+    counterTop.receiveShadow = true;
+    stall.add(counterBody, counterTop);
+
+    // 4 根木质棚柱
+    [[-0.72, -1.88], [0.72, -1.88], [-0.72, 1.88], [0.72, 1.88]].forEach(function (p) {
+      var post = new THREE.Mesh(new THREE.BoxGeometry(0.11, 2.95, 0.11), darkWoodMat);
+      post.position.set(p[0], 1.475, p[1]);
+      post.castShadow = true;
+      stall.add(post);
+    });
+
+    // 绿白条纹遮阳棚 + 前垂边
+    var awningMat = new THREE.MeshLambertMaterial({ map: awningTex });
+    var awningRoof = new THREE.Mesh(new THREE.BoxGeometry(2.55, 0.10, 4.45), awningMat);
+    awningRoof.position.set(0.15, 2.96, 0);
+    awningRoof.rotation.z = -0.18;
+    awningRoof.castShadow = true;
+    var valance = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.30, 4.45), awningMat);
+    valance.position.set(1.38, 2.62, 0);
+    stall.add(awningRoof, valance);
+
+    // 招牌「保熟鲜瓜 · 两元一斤」
     var signCanvas = document.createElement('canvas');
     signCanvas.width = 512;
     signCanvas.height = 128;
@@ -153,78 +416,129 @@
     sctx.fillText('保熟鲜瓜 · 两元一斤', 256, 64);
     var signTex = new THREE.CanvasTexture(signCanvas);
     signTex.encoding = THREE.sRGBEncoding;
-    var signBoard = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.68, 2.8), new THREE.MeshBasicMaterial({ map: signTex }));
-    signBoard.position.set(-0.62, 2.22, 0);
+    var signBoard = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.62, 2.75), new THREE.MeshBasicMaterial({ map: signTex }));
+    signBoard.position.set(-0.62, 2.25, 0);
     stall.add(signBoard);
 
-    var melonMat = makeMat(0x2f8f3a);
-    var stripeMat = makeMat(0x164a1d);
+    // 摊旁竹编瓜筐
+    var basketMat = makeMat(0xb88b4a);
+    var basket = new THREE.Mesh(new THREE.CylinderGeometry(0.46, 0.36, 0.56, 14), basketMat);
+    basket.position.set(0.35, 0.28, -2.35);
+    basket.castShadow = true;
+    stall.add(basket);
+
+    // 圆形老木墩砧板
+    var choppingBlock = new THREE.Mesh(new THREE.CylinderGeometry(0.36, 0.38, 0.12, 18), makeMat(0xc4955d));
+    choppingBlock.position.set(0.36, 1.02, 0.65);
+    choppingBlock.receiveShadow = true;
+    stall.add(choppingBlock);
+
+    // 精细纹理西瓜工厂（虎纹瓜皮 + 弯卷绿瓜蒂）
+    var melonMat = new THREE.MeshLambertMaterial({ map: melonTex });
+    var stemMat = makeMat(0x285422);
     function makeMelon(r) {
       var mg = new THREE.Group();
-      var ball = new THREE.Mesh(new THREE.SphereGeometry(r, 14, 12), melonMat);
-      ball.scale.set(1, 0.92, 1.15);
-      var ring = new THREE.Mesh(new THREE.TorusGeometry(r * 0.96, r * 0.08, 6, 14), stripeMat);
-      mg.add(ball, ring);
+      var ball = new THREE.Mesh(new THREE.SphereGeometry(r, 18, 14), melonMat);
+      ball.scale.set(1.0, 0.92, 1.14);
+      ball.castShadow = true;
+      var stem = new THREE.Mesh(new THREE.CylinderGeometry(0.015, 0.025, 0.08, 6), stemMat);
+      stem.position.set(0, r * 0.92, 0);
+      stem.rotation.z = 0.35;
+      mg.add(ball, stem);
       return mg;
     }
-    [[-0.2, 1.12, -1.15], [0.22, 1.12, -1.02], [0.0, 1.44, -1.08], [-0.15, 1.12, 1.2], [0.22, 1.12, 1.12]].forEach(function (pos) {
-      var m = makeMelon(0.25);
-      m.position.set(pos[0], pos[1], pos[2]);
+
+    // 瓜摊金字塔堆叠（12 颗条纹大西瓜 + 筐里 2 颗）
+    [
+      [-0.30, 1.18, -1.25, 0.25], [0.22, 1.18, -1.22, 0.25], [-0.04, 1.18, -0.78, 0.25],
+      [0.36, 1.18, -0.82, 0.24], [-0.36, 1.18, -0.75, 0.24], [-0.06, 1.54, -1.04, 0.24],
+      [-0.25, 1.18, 1.38, 0.25], [0.26, 1.18, 1.36, 0.25], [0.02, 1.54, 1.37, 0.24],
+      [0.24, 0.66, -2.30, 0.23], [0.48, 0.68, -2.42, 0.22]
+    ].forEach(function (spec) {
+      var m = makeMelon(spec[3]);
+      m.position.set(spec[0], spec[1], spec[2]);
+      m.rotation.y = spec[2] * 1.3;
       stall.add(m);
     });
+
+    // 切开展示的半颗红瓤瓜（摆在旁边做对比）
+    var demoHalf = new THREE.Group();
+    var demoSkin = new THREE.Mesh(new THREE.SphereGeometry(0.22, 16, 12, 0, Math.PI), melonMat);
+    demoSkin.rotation.x = Math.PI / 2;
+    var demoFlesh = new THREE.Mesh(new THREE.CircleGeometry(0.215, 16), new THREE.MeshLambertMaterial({ map: ripeTex }));
+    demoFlesh.rotation.x = -Math.PI / 2;
+    demoHalf.add(demoSkin, demoFlesh);
+    demoHalf.position.set(-0.34, 1.06, 0.15);
+    stall.add(demoHalf);
     scene.add(stall);
 
-    // 可劈开的“主角生瓜”
+    // 可劈开的“主角生瓜”（放在砧板上，劈开露出白粉生瓜瓤纹理）
     var heroMelon = new THREE.Group();
-    heroMelon.position.set(-1.90, 1.30, -0.35);
-    var halfGeo = new THREE.SphereGeometry(0.29, 14, 12, 0, Math.PI);
-    var fleshMat = makeMat(0xf5e8d0);
+    heroMelon.position.set(-1.94, 1.44, -0.45);
+    var halfGeo = new THREE.SphereGeometry(0.29, 18, 14, 0, Math.PI);
+    var unripeFaceMat = new THREE.MeshLambertMaterial({ map: unripeTex });
     var halfL = new THREE.Group();
     var skinL = new THREE.Mesh(halfGeo, melonMat);
     skinL.rotation.y = -Math.PI / 2;
-    var faceL = new THREE.Mesh(new THREE.CircleGeometry(0.28, 14), fleshMat);
+    var faceL = new THREE.Mesh(new THREE.CircleGeometry(0.285, 16), unripeFaceMat);
     faceL.rotation.y = Math.PI / 2;
     halfL.add(skinL, faceL);
     var halfR = new THREE.Group();
     var skinR = new THREE.Mesh(halfGeo, melonMat);
     skinR.rotation.y = Math.PI / 2;
-    var faceR = new THREE.Mesh(new THREE.CircleGeometry(0.28, 14), fleshMat);
+    var faceR = new THREE.Mesh(new THREE.CircleGeometry(0.285, 16), unripeFaceMat);
     faceR.rotation.y = -Math.PI / 2;
     halfR.add(skinR, faceR);
     heroMelon.add(halfL, halfR);
     scene.add(heroMelon);
 
-    // 台秤 + 红蓝大吸铁石
+    // ── 精细化金属台秤 + 红蓝 U 型大吸铁石 ──
     var scaleGroup = new THREE.Group();
-    scaleGroup.position.set(-1.82, 1.06, 0.58);
-    var scaleBody = new THREE.Mesh(new THREE.BoxGeometry(0.56, 0.25, 0.56), makeMat(0x475569));
-    scaleGroup.add(scaleBody);
-    var dial = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.15, 0.08, 14), makeMat(0xf8fafc));
-    dial.rotation.z = Math.PI / 2;
-    dial.position.set(0.29, 0.02, 0);
-    scaleGroup.add(dial);
+    scaleGroup.position.set(-1.82, 1.10, 0.56);
+    var metalDark = makeMat(0x475569);
+    var metalLight = makeMat(0xcbd5e1);
+    var scaleBody = new THREE.Mesh(new THREE.BoxGeometry(0.54, 0.28, 0.54), metalDark);
+    scaleBody.castShadow = true;
+    var scaleRim = new THREE.Mesh(new THREE.CylinderGeometry(0.17, 0.17, 0.06, 18), metalDark);
+    scaleRim.rotation.z = Math.PI / 2;
+    scaleRim.position.set(0.27, 0.0, 0);
+    var dialFace = new THREE.Mesh(new THREE.CircleGeometry(0.15, 18), new THREE.MeshBasicMaterial({ map: dialTex }));
+    dialFace.rotation.y = Math.PI / 2;
+    dialFace.position.set(0.305, 0.0, 0);
+    scaleGroup.add(scaleBody, scaleRim, dialFace);
 
+    // 真正的弯曲 U 型红蓝马蹄磁铁（带银色磁极头）
     var magnetGroup = new THREE.Group();
-    magnetGroup.position.set(0, 0.15, 0);
-    var magRed = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.12, 0.15), makeMat(0xdc2626, { emissive: 0x7f1d1d, emissiveIntensity: 0.55 }));
-    magRed.position.set(-0.04, 0, -0.075);
-    var magBlue = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.12, 0.15), makeMat(0x2563eb, { emissive: 0x1e3a8a, emissiveIntensity: 0.55 }));
-    magBlue.position.set(-0.04, 0, 0.075);
-    var magRing = new THREE.Mesh(new THREE.TorusGeometry(0.34, 0.032, 8, 22), new THREE.MeshBasicMaterial({ color: 0xfacc15 }));
+    magnetGroup.position.set(0, 0.17, 0);
+    var magArch = new THREE.Mesh(new THREE.TorusGeometry(0.11, 0.045, 10, 16, Math.PI), makeMat(0xb91c1c, { emissive: 0x5c0a0a, emissiveIntensity: 0.45 }));
+    magArch.rotation.x = Math.PI / 2;
+    magArch.rotation.z = Math.PI / 2;
+    magArch.position.x = -0.08;
+    var poleRed = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.09, 0.09), makeMat(0xdc2626, { emissive: 0x7f1d1d, emissiveIntensity: 0.5 }));
+    poleRed.position.set(0.02, 0, -0.11);
+    var poleBlue = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.09, 0.09), makeMat(0x2563eb, { emissive: 0x1e3a8a, emissiveIntensity: 0.5 }));
+    poleBlue.position.set(0.02, 0, 0.11);
+    var tip1 = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.092, 0.092), metalLight);
+    tip1.position.set(0.12, 0, -0.11);
+    var tip2 = tip1.clone();
+    tip2.position.z = 0.11;
+    var magRing = new THREE.Mesh(new THREE.TorusGeometry(0.34, 0.03, 8, 22), new THREE.MeshBasicMaterial({ color: 0xfacc15 }));
     magRing.rotation.x = Math.PI / 2;
     magRing.visible = false;
-    magnetGroup.add(magRed, magBlue, magRing);
+    magnetGroup.add(magArch, poleRed, poleBlue, tip1, tip2, magRing);
     scaleGroup.add(magnetGroup);
 
     var trayPivot = new THREE.Group();
-    trayPivot.position.set(-0.28, 0.20, 0);
-    var trayMesh = new THREE.Mesh(new THREE.BoxGeometry(0.58, 0.06, 0.58), makeMat(0xcbd5e1));
+    trayPivot.position.set(-0.28, 0.22, 0);
+    var trayMesh = new THREE.Mesh(new THREE.BoxGeometry(0.60, 0.05, 0.60), metalLight);
     trayMesh.position.set(0.28, 0, 0);
-    trayPivot.add(trayMesh);
+    var trayLip = new THREE.Mesh(new THREE.BoxGeometry(0.64, 0.08, 0.64), makeMat(0x94a3b8));
+    trayLip.position.set(0.28, 0.03, 0);
+    trayPivot.add(trayMesh, trayLip);
     scaleGroup.add(trayPivot);
     scene.add(scaleGroup);
 
-    // 高精度 GLB 角色挂载槽（绝不使用粗糙方块人）
+    // 跑酷同款高精度 GLB 角色挂载槽
     var haogeSlot = new THREE.Group();
     haogeSlot.position.set(-3.2, 0.14, -1.1);
     haogeSlot.rotation.y = Math.PI / 2;
@@ -245,7 +559,7 @@
       new THREE.RingGeometry(0.38, 0.72, 18, 1, -0.8, 1.8),
       new THREE.MeshBasicMaterial({ color: 0xffffff, side: THREE.DoubleSide, transparent: true, opacity: 0 })
     );
-    slashFlash.position.set(-1.90, 1.40, -0.35);
+    slashFlash.position.set(-1.94, 1.52, -0.45);
     slashFlash.visible = false;
     scene.add(slashFlash);
 
@@ -318,11 +632,10 @@
     if (qu.clearRigPose) qu.clearRigPose();
 
     if (t < 4.0) {
-      // 第 1 幕：骑车滑停瓜摊前
       var p1 = ease(t / 2.2);
-      sc.position.set(-0.30, 0, 3.8 - p1 * 3.8);
+      sc.position.set(-0.28, 0, 3.8 - p1 * 3.8);
       sc.rotation.y = Math.PI * (1 - 0.15 * p1);
-      q.position.set(-0.30, -0.45, 3.8 - p1 * 3.8);
+      q.position.set(-0.28, -0.45, 3.8 - p1 * 3.8);
       q.rotation.set(0, -Math.PI / 2, 0);
       if (qu.leftLeg) qu.leftLeg.rotation.x = -0.95;
       if (qu.rightLeg) qu.rightLeg.rotation.x = -0.95;
@@ -336,11 +649,10 @@
       camera.position.set(2.4 - p1 * 0.85, 2.35, 4.4 - p1 * 1.3);
       camera.lookAt(-1.6, 1.45, -0.5);
     } else if (t < 7.5) {
-      // 第 2 幕：下车对峙“这瓜保熟吗？”
       var p2 = ease((t - 4.0) / 1.1);
-      sc.position.set(-0.30, 0, 0.0);
+      sc.position.set(-0.28, 0, 0.0);
       sc.rotation.y = Math.PI * 0.85;
-      q.position.set(-0.30 - p2 * 0.65, 0, -0.35);
+      q.position.set(-0.28 - p2 * 0.65, 0, -0.35);
       q.rotation.set(0, -Math.PI / 2, 0);
       if (qu.spine) qu.spine.rotation.x = 0.14;
       if (qu.rightArm) qu.rightArm.rotation.x = -0.55 - 0.18 * Math.sin((t - 4.0) * 4);
@@ -350,24 +662,22 @@
       camera.position.set(1.15, 2.02, 2.25 - p2 * 0.45);
       camera.lookAt(-1.95, 1.55, -0.65);
     } else if (t < 11.5) {
-      // 第 3 幕：特写掀开秤盘，红蓝吸铁石曝光
       var p3 = ease((t - 7.5) / 1.0);
-      sc.position.set(-0.30, 0, 0.0);
-      q.position.set(-1.05, 0, 0.32);
+      sc.position.set(-0.28, 0, 0.0);
+      q.position.set(-1.02, 0, 0.32);
       q.rotation.set(0, -Math.PI / 2 - 0.28, 0);
       if (qu.spine) qu.spine.rotation.x = 0.16;
       if (qu.rightArm) qu.rightArm.rotation.x = -1.15 * p3;
       if (qu.rightForeArm) qu.rightForeArm.rotation.x = -0.55;
-      actors.trayPivot.rotation.z = 1.38 * p3;
+      actors.trayPivot.rotation.z = 1.42 * p3;
       actors.magRing.visible = p3 > 0.42;
       actors.magRing.scale.setScalar(1 + 0.14 * Math.sin(t * 14));
       var shake = (t > 8.1 && t < 9.2) ? Math.sin(t * 55) * 0.05 : 0;
       camera.position.set(-0.55 + shake, 1.92 + shake, 2.35 - p3 * 0.72);
-      camera.lookAt(-1.82, 1.18, 0.58);
+      camera.lookAt(-1.82, 1.24, 0.56);
     } else if (t < 15.8) {
-      // 第 4 幕：华强举刀劈生瓜（真实 GLB 弯肘弓步下劈）
-      sc.position.set(-0.30, 0, 0.0);
-      q.position.set(-0.98, 0, -0.35);
+      sc.position.set(-0.28, 0, 0.0);
+      q.position.set(-0.96, 0, -0.45);
       q.rotation.set(0, -Math.PI / 2, 0);
       var chopT = t - 11.5;
       if (chopT < 0.95) {
@@ -401,11 +711,11 @@
         if (hu.rightArm) hu.rightArm.rotation.x = -1.55;
       }
       camera.position.set(0.75, 2.15, 1.85);
-      camera.lookAt(-2.0, 1.45, -0.45);
+      camera.lookAt(-2.0, 1.50, -0.45);
     } else {
-      // 第 5 幕：真 GLB 郝哥与华强街道追逃
-      var p5 = Math.min(1, (t - 15.8) / 3.7);
-      sc.position.set(-0.30, 0, 0.0);
+      // 第 5 幕：追逃并平滑抬升镜头贴近主界面跟拍视角，随后淡出无缝衔接主界面
+      var p5 = Math.min(1, (t - 15.8) / 4.0);
+      sc.position.set(-0.28, 0, 0.0);
       actors.halfL.position.set(-0.20, 0, -0.24);
       actors.halfR.position.set(0.20, 0, 0.24);
       var runZ = -1.1 - p5 * 14.5;
@@ -419,8 +729,8 @@
       if (qu.spine) qu.spine.rotation.x = 0.08;
       if (qu.rightForeArm) qu.rightForeArm.rotation.x = -0.58;
 
-      camera.position.set(0.4 * (1 - p5), 2.35 + p5 * 0.8, runZ + 5.2 + p5 * 2.0);
-      camera.lookAt(0, 1.4, runZ - 1.5);
+      camera.position.set(0.4 * (1 - p5), 2.35 + p5 * 1.4, runZ + 5.2 + p5 * 2.6);
+      camera.lookAt(0, 1.45, runZ - 1.5);
     }
 
     if (window.RunnerModels && window.RunnerModels.update) {
@@ -498,14 +808,15 @@
     var dt = lastFrameMs ? Math.min(0.05, (nowMs - lastFrameMs) / 1000) : 0.016;
     lastFrameMs = nowMs;
     elapsed += dt;
-    if (elapsed >= TOTAL_DUR) {
-      if (ready || openMode !== 'loading') {
-        close(true);
-        return;
-      }
+
+    // 接近结尾时自动启动平滑电影淡出，无缝过渡到游戏主界面
+    if (!isClosing && elapsed >= FADE_OUT_AT && (ready || openMode !== 'loading')) {
+      close(true);
+    } else if (!isClosing && elapsed >= TOTAL_DUR) {
       elapsed = 0;
       lastCueIdx = -1;
     }
+
     var actIdx = updateCueUI(elapsed);
     if (visualMode === 'glb3d' && glbLoaded && renderer && scene && camera) {
       updateDrama3D(elapsed, dt);
@@ -531,7 +842,7 @@
           '<span class="prequel-title">前情提要 · 华强买瓜（《征服》原剧还原）</span>' +
           '<div class="prequel-actions-top">' +
             '<button id="prequelAudioHint" type="button" class="prequel-audio-hint">🔊 点击开启原剧配音</button>' +
-            '<button id="prequelModeBtn" type="button" class="prequel-audio-btn" hidden>🎨 切漫画分镜</button>' +
+            '<button id="prequelModeBtn" type="button" class="prequel-audio-btn" hidden>🎬 切3D真模型</button>' +
             '<button id="prequelAudioBtn" type="button" class="prequel-audio-btn">🔊 原声</button>' +
           '</div>' +
         '</div>' +
@@ -613,8 +924,8 @@
     });
 
     renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true });
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
-    renderer.shadowMap.enabled = true;
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
+    renderer.shadowMap.enabled = false;
     buildScene();
     resize();
     window.addEventListener('resize', resize);
@@ -649,6 +960,8 @@
   function open(opts) {
     opts = opts || {};
     ensureDOM();
+    if (closeTimer) { clearTimeout(closeTimer); closeTimer = 0; }
+    isClosing = false;
     openMode = opts.mode || 'replay';
     onCloseCb = opts.onClose || null;
     if (typeof opts.ready === 'boolean') ready = opts.ready;
@@ -663,13 +976,12 @@
     resize();
     syncSkipButton();
 
-    // 默认展示高质感 AI 复古电影分镜（零粗糙模型），GLB 就绪后可随时在右上角一键切换为跑酷同款真 GLB 3D 实机版
     applyVisualMode('storyboard');
     if (window.RunnerModels && window.RunnerModels.usesGltf && window.RunnerModels.usesGltf() && openMode !== 'loading') {
       ensureGLBActors();
     }
 
-    overlay.classList.remove('hidden');
+    overlay.classList.remove('hidden', 'is-closing');
     if (rafId) cancelAnimationFrame(rafId);
     rafId = requestAnimationFrame(loop);
   }
@@ -700,13 +1012,15 @@
     syncSkipButton();
   }
 
-  function close(markSeen) {
-    if (!isOpen) return;
+  function finishClose(markSeen) {
     isOpen = false;
+    isClosing = false;
+    closeTimer = 0;
     if (rafId) cancelAnimationFrame(rafId);
     rafId = 0;
     if (window.AppAudio && window.AppAudio.stop) window.AppAudio.stop();
     if (overlay) overlay.classList.add('hidden');
+    if (overlay) overlay.classList.remove('is-closing');
     if (markSeen) {
       try { localStorage.setItem('haoge_prequel_seen', '1'); } catch (e) {}
     }
@@ -715,6 +1029,15 @@
       onCloseCb = null;
       cb();
     }
+  }
+
+  function close(markSeen) {
+    if (!isOpen || isClosing) return;
+    isClosing = true;
+    if (overlay) overlay.classList.add('is-closing');
+    closeTimer = setTimeout(function () {
+      finishClose(markSeen);
+    }, 820);
   }
 
   window.StreetPrequel = {
