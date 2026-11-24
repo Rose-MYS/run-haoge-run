@@ -1134,6 +1134,7 @@ window.RunnerModels = (function () {
       watchG.add(band, bezel, dial);
       watchG.position.set(0, -0.03 * invS, 0);
       leftHand.add(watchG);
+      leftHand.userData.haogeWatchGroup = watchG;
     }
 
     // 2. 敞开夹克白滚边 + 军绿内搭 T 恤胸前红黄黑彩色图腾印花
@@ -1336,15 +1337,20 @@ window.RunnerModels = (function () {
   function setBloodyKnife(runner, on) {
     var u = runner && runner.userData;
     var parts = [u && u.knifeBlade, u && u.knifeEdge];
+    function tintMesh(m) {
+      if (!m || !m.isMesh || !m.material || Array.isArray(m.material)) return;
+      if (!m.userData.bloodMat) {
+        m.userData.origMat = m.material;
+        m.userData.bloodMat = m.material.clone();
+        m.userData.bloodMat.color.set(0x9e1b1b);
+      }
+      m.material = on ? m.userData.bloodMat : m.userData.origMat;
+    }
     for (var i = 0; i < parts.length; i++) {
       var part = parts[i];
       if (!part) continue;
-      if (!part.userData.bloodMat) {
-        part.userData.origMat = part.material;
-        part.userData.bloodMat = part.material.clone();
-        part.userData.bloodMat.color.set(0x9e1b1b);
-      }
-      part.material = on ? part.userData.bloodMat : part.userData.origMat;
+      if (part.isMesh) tintMesh(part);
+      else if (part.traverse) part.traverse(tintMesh);
     }
   }
 
@@ -1365,8 +1371,146 @@ window.RunnerModels = (function () {
     }
   }
 
+  // 加载由 Blender 4.2.9 LTS 产出的高精度结尾资产（踏板摩托「冀A·E7168」、一家三口、瓜摊小弟、水果尖刀与金色大金表）
+  function loadEndingAssets(targets) {
+    if (!targets || !window.THREE || !THREE.GLTFLoader) return;
+    if (fromFile) return; // file:// 离线单文件模式静默使用内建模型，避免 CORS 报错
+    var gltfLoader = new THREE.GLTFLoader();
+    function prepScene(root) {
+      root.traverse(function (o) {
+        if (o.isMesh) {
+          o.castShadow = false;
+          o.receiveShadow = true;
+        }
+      });
+      return root;
+    }
+    function replaceContents(container, glbScene) {
+      if (!container) return;
+      for (var i = container.children.length - 1; i >= 0; i--) {
+        if (container.children[i].isSprite) continue;
+        container.remove(container.children[i]);
+      }
+      container.add(glbScene);
+    }
+    function mapCharacterNodes(target, glbScene, kind) {
+      var u = target.userData || {};
+      u.kind = kind;
+      u.isBlenderGLB = true;
+      u.head = glbScene.getObjectByName('Head') || u.head;
+      u.leftArm = glbScene.getObjectByName('LeftArm') || u.leftArm;
+      u.leftForeArm = glbScene.getObjectByName('LeftForeArm') || u.leftForeArm;
+      u.rightArm = glbScene.getObjectByName('RightArm') || u.rightArm;
+      u.rightForeArm = glbScene.getObjectByName('RightForeArm') || u.rightForeArm;
+      u.leftLeg = glbScene.getObjectByName('LeftLeg') || u.leftLeg;
+      u.rightLeg = glbScene.getObjectByName('RightLeg') || u.rightLeg;
+      u.mouthClosed = null;
+      u.mouthOpen = null;
+      target.userData = u;
+    }
+
+    // 1. 黑色踏板摩托「冀A·E7168」
+    if (targets.scooter) {
+      gltfLoader.load('assets/models/scooter-jia-e7168.glb', function (gltf) {
+        var sc = prepScene(gltf.scene);
+        replaceContents(targets.scooter, sc);
+        var wf = sc.getObjectByName('WheelFront');
+        var wr = sc.getObjectByName('WheelRear');
+        targets.scooter.userData = {
+          isBlenderGLB: true,
+          wheels: [wf, wr].filter(Boolean),
+          exhaustTip: sc.getObjectByName('ExhaustTip') || null,
+          mirrorLeft: sc.getObjectByName('MirrorLeft') || null,
+          seatPos: sc.getObjectByName('SeatPos') || null,
+          handleLeft: sc.getObjectByName('HandleLeft') || null,
+          handleRight: sc.getObjectByName('HandleRight') || null,
+        };
+      }, undefined, function () {});
+    }
+
+    // 2. 瓜摊小弟
+    if (targets.xiaoDiModel) {
+      gltfLoader.load('assets/models/xiaodi.glb', function (gltf) {
+        var xd = prepScene(gltf.scene);
+        replaceContents(targets.xiaoDiModel, xd);
+        mapCharacterNodes(targets.xiaoDiModel, xd, 'xiaodi');
+      }, undefined, function () {});
+    }
+
+    // 3. 路边一家三口（爸爸 / 妈妈 / 女儿）
+    var fGroups = [];
+    if (targets.endingFamily) fGroups.push(targets.endingFamily);
+    if (targets.familyGroups && targets.familyGroups.length) {
+      for (var fi = 0; fi < targets.familyGroups.length; fi++) fGroups.push(targets.familyGroups[fi]);
+    }
+    if (fGroups.length) {
+      [
+        { key: 'father', url: 'assets/models/family-father.glb' },
+        { key: 'mother', url: 'assets/models/family-mother.glb' },
+        { key: 'daughter', url: 'assets/models/family-daughter.glb' },
+      ].forEach(function (spec) {
+        gltfLoader.load(spec.url, function (gltf) {
+          for (var gi = 0; gi < fGroups.length; gi++) {
+            var member = fGroups[gi].userData && fGroups[gi].userData[spec.key];
+            if (!member) continue;
+            var clone = prepScene(gi === 0 ? gltf.scene : gltf.scene.clone(true));
+            replaceContents(member, clone);
+            mapCharacterNodes(member, clone, 'family-' + spec.key);
+          }
+        }, undefined, function () {});
+      });
+    }
+
+    // 4. 华强精雕水果尖刀（等华强 GLB 就绪后替换右手道具）
+    if (targets.huaQiang) {
+      gltfLoader.load('assets/models/huaqiang-knife.glb', function (gltf) {
+        var knifeScene = prepScene(gltf.scene);
+        function attachKnife() {
+          var u = targets.huaQiang.userData;
+          if (!u || !u.model) { setTimeout(attachKnife, 400); return; }
+          var rh = u.model.getObjectByName('RightHand');
+          if (!rh) return;
+          if (u.knifeGroup && u.knifeGroup.parent) u.knifeGroup.parent.remove(u.knifeGroup);
+          var invS = u.model.scale && u.model.scale.x ? (1 / u.model.scale.x) : 1;
+          knifeScene.scale.setScalar(invS);
+          knifeScene.position.set(-0.01 * invS, 0.035 * invS, -0.025 * invS);
+          knifeScene.rotation.set(Math.PI + 0.18, 0, -0.22);
+          rh.add(knifeScene);
+          u.knifeGroup = knifeScene;
+          u.setKnifeVisible = function (v) { knifeScene.visible = !!v; };
+          var blade = knifeScene.getObjectByName('KnifeBlade');
+          if (blade) { u.knifeBlade = blade; u.knifeEdge = null; }
+        }
+        attachKnife();
+      }, undefined, function () {});
+    }
+
+    // 5. 郝哥精雕宽链节金色大金表（等郝哥 GLB 就绪后替换左手腕配件）
+    if (targets.haoGe) {
+      gltfLoader.load('assets/models/haoge-watch.glb', function (gltf) {
+        var watchScene = prepScene(gltf.scene);
+        function attachWatch() {
+          var u = targets.haoGe.userData;
+          if (!u || !u.model) { setTimeout(attachWatch, 400); return; }
+          var lh = findBone(u.model, boneNamesAny('LeftHand')) || findBone(u.model, boneNamesAny('LeftForeArm'));
+          if (!lh) return;
+          if (lh.userData.haogeWatchGroup && lh.userData.haogeWatchGroup.parent) {
+            lh.userData.haogeWatchGroup.parent.remove(lh.userData.haogeWatchGroup);
+          }
+          var invS = u.model.scale && u.model.scale.x ? (1 / u.model.scale.x) : 1;
+          watchScene.scale.setScalar(invS);
+          watchScene.position.set(0, -0.03 * invS, 0);
+          lh.add(watchScene);
+          lh.userData.haogeWatchGroup = watchScene;
+        }
+        attachWatch();
+      }, undefined, function () {});
+    }
+  }
+
     return {
       loadRunner: loadRunner,
+      loadEndingAssets: loadEndingAssets,
       refreshPublishedCast: function () {
         approved = publishedCampaign && window.HAOGE_APPROVED_CAST;
         REFINED_CHASER_URL = approved ? approved.huaqiang : 'assets/models/huaqiang-refined.glb';

@@ -441,6 +441,16 @@
   var scooter = window.Runners.createElectricScooter();
   scooter.visible = false;
   scene.add(scooter);
+  if (window.RunnerModels && window.RunnerModels.loadEndingAssets) {
+    window.RunnerModels.loadEndingAssets({
+      scooter: scooter,
+      xiaoDiModel: xiaoDiModel,
+      endingFamily: endingFamily,
+      familyGroups: familyGroups,
+      haoGe: haoGe,
+      huaQiang: huaQiang
+    });
+  }
 
   var pendingStreetModels = 0;
   var streetModelFallback = false;
