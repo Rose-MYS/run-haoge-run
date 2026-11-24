@@ -304,10 +304,26 @@
   scene.add(skillSidekick);
 
   var skillElephant = window.StreetElephant ? window.StreetElephant.createElephant({ royal: true }) : new THREE.Group();
-  skillElephant.scale.setScalar(1.42);
+  skillElephant.scale.setScalar(1.04);
   skillElephant.visible = false;
   scene.add(skillElephant);
-  var elephantChargeState = { active: false, t: 0, dur: 2.4, startX: 0, startZ: -2.5, hitDone: false };
+  var elephantChargeState = {
+    active: false,
+    t: 0,
+    dur: 2.05,
+    hitTime: 0.42,
+    side: -1,
+    startX: 0,
+    startZ: 4.5,
+    hitX: 0,
+    hitZ: 2.15,
+    endX: 0,
+    endZ: -11.5,
+    chaserStartX: 0,
+    chaserStartZ: 4.5,
+    hitDone: false
+  };
+  var skillCamBlend = 0;
 
   var piguaSlashMat = new THREE.MeshBasicMaterial({
     color: 0xeaf6ff,
@@ -2392,26 +2408,20 @@
     S.chaserFlyLand = false;
     S.chaserFlyDir = chaser.position.x >= player.position.x ? 1 : -1;
     if (wasLastChance) {
-      // 濒死反杀：郝哥开大把近身的华强轰飞
+      // 濒死反杀：郝哥照常奔跑，大象冲出把近身的华强撞飞
       S.chaserZOff = -(push + 2.2);
       S.skillFxT = 1.0;
-      S.pushPoseT = 0.45;
       S.shake = 0.55;
       S.flash = 0.6;
       startShock(player.position.x, player.position.y + 1.17, player.position.z);
     }
     spawnBurst(player.position.x, player.position.y + 1.3, player.position.z);
     startShock(player.position.x, 0.08, player.position.z);
-    showBubble(campaign ? '保熟！拉开距离！' : '保熟！小弟上！', true);
+    showBubble('保熟！大象撞飞他！', true);
     window.AppAudio.skill();
-    window.AppAudio.impact();
     window.AppAudio.playVoice('daxiang');
     if (campaign) {
       S.chaserZOff = 0;
-      S.pushPoseT = .38;
-      S.chaserHitT = S.chaserHitMax = .32;
-    } else {
-      spawnSidekick();
     }
     spawnElephantCharge();
     flashGold();
@@ -2420,14 +2430,28 @@
 
   function spawnElephantCharge() {
     if (S.mode !== 'playing' || !window.StreetElephant) return;
+    var side = player.position.x >= 0 ? -1 : 1;
+    var hitX = Math.max(-2.6, Math.min(2.6, player.position.x + side * 1.35));
+    var hitZ = 2.15;
     elephantChargeState.active = true;
     elephantChargeState.t = 0;
     elephantChargeState.hitDone = false;
-    elephantChargeState.startX = player.position.x + (player.position.x >= 0 ? -1.5 : 1.5);
-    elephantChargeState.startZ = player.position.z - 2.6;
+    elephantChargeState.side = side;
+    elephantChargeState.hitX = hitX;
+    elephantChargeState.hitZ = hitZ;
+    elephantChargeState.startX = hitX + side * 6.4;
+    elephantChargeState.startZ = hitZ + 2.4;
+    elephantChargeState.endX = hitX - side * 8.2;
+    elephantChargeState.endZ = -11.5;
+    elephantChargeState.chaserStartX = Math.max(-3.0, Math.min(3.0, chaser.position.x));
+    elephantChargeState.chaserStartZ = Math.min(Math.max(chaser.position.z, hitZ + 0.6), hitZ + 3.2);
     skillElephant.position.set(elephantChargeState.startX, 0, elephantChargeState.startZ);
-    skillElephant.rotation.set(0, 0, 0);
+    skillElephant.rotation.set(0, Math.atan2(hitX - elephantChargeState.startX, hitZ - elephantChargeState.startZ), 0);
     skillElephant.visible = true;
+    if (!PIGUA.active) {
+      chaser.visible = true;
+      chaser.position.y = 0;
+    }
     S.elephantCharges = (S.elephantCharges || 0) + 1;
     if (S.elephantCharges >= 3) unlockEgg('elephantStampede');
   }
@@ -2435,26 +2459,74 @@
   function updateElephantCharge(dt) {
     if (!elephantChargeState.active) return;
     elephantChargeState.t += dt;
-    var p = elephantChargeState.t / elephantChargeState.dur;
-    if (p >= 1) {
+    var t = elephantChargeState.t;
+    var dur = elephantChargeState.dur;
+    var hitTime = elephantChargeState.hitTime;
+    if (t >= dur) {
       elephantChargeState.active = false;
       skillElephant.visible = false;
       return;
     }
-    var targetX = chaser.position.x;
-    var targetZ = Math.max(chaser.position.z + 13, elephantChargeState.startZ + 25);
-    var blendX = Math.min(1, p * 2.2);
-    skillElephant.position.x = elephantChargeState.startX + (targetX - elephantChargeState.startX) * blendX;
-    skillElephant.position.z = elephantChargeState.startZ + (targetZ - elephantChargeState.startZ) * (p * p * (3 - 2 * p));
-    skillElephant.rotation.y = Math.atan2(targetX - skillElephant.position.x, Math.max(0.5, targetZ - skillElephant.position.z)) * 0.35;
-    window.StreetElephant.animateElephant(skillElephant, S.time, 'charge');
-    if (p >= 0.36 && !elephantChargeState.hitDone) {
-      elephantChargeState.hitDone = true;
-      startShock(chaser.position.x, 0.14, chaser.position.z);
-      spawnBurst(chaser.position.x, 1.35, chaser.position.z);
-      spawnDust(chaser.position.x, 0.2, chaser.position.z);
-      S.shake = Math.max(S.shake, 0.38);
+    var prevX = skillElephant.position.x;
+    var prevZ = skillElephant.position.z;
+    // 大象重心停在华强侧后方 1.25m 处，确保是象牙/头部正中顶飞华强，不会用象身遮挡华强
+    var contactX = elephantChargeState.hitX + elephantChargeState.side * 1.25;
+    var contactZ = elephantChargeState.hitZ + 0.55;
+    if (t < hitTime) {
+      var a = easeOut(Math.min(1, t / hitTime));
+      skillElephant.position.x = elephantChargeState.startX + (contactX - elephantChargeState.startX) * a;
+      skillElephant.position.z = elephantChargeState.startZ + (contactZ - elephantChargeState.startZ) * a;
+      if (!PIGUA.active && S.chaserFlyT <= 0) {
+        chaser.visible = true;
+        chaser.position.x = elephantChargeState.chaserStartX + (elephantChargeState.hitX - elephantChargeState.chaserStartX) * a;
+        chaser.position.z = elephantChargeState.chaserStartZ + (elephantChargeState.hitZ - elephantChargeState.chaserStartZ) * a;
+        chaser.position.y = 0;
+      }
+      if (Math.random() < 0.45) {
+        spawnDust(skillElephant.position.x, 0.12, skillElephant.position.z);
+      }
+    } else {
+      if (!elephantChargeState.hitDone) {
+        elephantChargeState.hitDone = true;
+        var hx = elephantChargeState.hitX;
+        var hz = elephantChargeState.hitZ;
+        startShock(hx, 0.25, hz);
+        startShock(hx, 1.25, hz);
+        spawnBurst(hx, 1.35, hz);
+        spawnDust(hx, 0.25, hz);
+        window.AppAudio.impact();
+        S.shake = Math.max(S.shake, 0.52);
+        S.flash = Math.max(S.flash, 0.42);
+        showBubble('走你！', true);
+        if (!PIGUA.active) {
+          chaser.visible = true;
+          chaser.position.x = hx;
+          chaser.position.z = hz;
+          chaser.position.y = 0.2;
+          S.chaserFlyDir = -elephantChargeState.side;
+          S.chaserFlyFromX = hx;
+          S.chaserFlyFromZ = hz;
+          S.chaserFlyDelay = 0;
+          S.chaserFlyMax = 1.45;
+          S.chaserFlyT = 1.45;
+          S.chaserHitT = 0;
+          S.chaserHitMax = 0;
+        }
+      }
+      var b = Math.min(1, (t - hitTime) / Math.max(0.01, dur - hitTime));
+      var bEase = b * (1.28 - 0.28 * b);
+      skillElephant.position.x = contactX + (elephantChargeState.endX - contactX) * bEase;
+      skillElephant.position.z = contactZ + (elephantChargeState.endZ - contactZ) * bEase;
+      if (b < 0.6 && Math.random() < 0.32) {
+        spawnDust(skillElephant.position.x, 0.12, skillElephant.position.z);
+      }
     }
+    var dx = skillElephant.position.x - prevX;
+    var dz = skillElephant.position.z - prevZ;
+    if (dx * dx + dz * dz > 0.0001) {
+      skillElephant.rotation.y = Math.atan2(dx, dz);
+    }
+    window.StreetElephant.animateElephant(skillElephant, S.time, 'charge');
   }
 
   function spawnSidekick() {
@@ -2592,27 +2664,30 @@
     S.chaserFlyT = Math.max(0, S.chaserFlyT - dt);
     var total = Math.max(0.0001, S.chaserFlyMax);
     var p = 1 - S.chaserFlyT / total;
-    var stiffEnd = 0.12;
+    var stiffEnd = 0.05;
     if (p < stiffEnd) {
       chaser.position.x = S.chaserFlyFromX;
-      chaser.position.z = baseZ;
-      chaser.position.y = 0;
+      chaser.position.z = S.chaserFlyFromZ;
+      chaser.position.y = 0.2;
       return;
     }
     var p2 = Math.min(1, (p - stiffEnd) / (1 - stiffEnd));
-    // 螺旋画圈：半径随飞行放大，x/y 按圆圈相位摆动，z 持续后移
-    var flyAngle = p2 * Math.PI * 2 * CONFIG.chaserFlyLoops;
-    var flyAspect = window.innerWidth / window.innerHeight;
-    var flySideScale = Math.min(1, Math.max(0.4, flyAspect / 1.5));
-    var flyRadius = CONFIG.chaserFlySide * p2 * flySideScale;
-    chaser.position.x = S.chaserFlyFromX + S.chaserFlyDir * flyRadius * Math.cos(flyAngle);
-    chaser.position.z = S.chaserFlyFromZ - CONFIG.chaserFlyBack * p2 + flyRadius * 0.3 * Math.sin(flyAngle);
-    chaser.position.y = CONFIG.chaserFlyHeight * (0.5 + 0.5 * Math.min(1, p2 * 2));
+    // 清晰入镜的撞飞弧线：从镜头下方被大象顶起，高速向前上方(-Z, +Y)翻滚飞越郝哥头顶并飞向远空
+    var flyAspect = window.innerWidth / Math.max(1, window.innerHeight);
+    var flySide = Math.min(3.4, Math.max(1.5, flyAspect * 2.3));
+    var zCurve = p2 * (1.28 - 0.28 * p2);
+    chaser.position.x = S.chaserFlyFromX + S.chaserFlyDir * flySide * Math.sin(p2 * Math.PI * 0.85) + Math.sin(p2 * Math.PI * 3.5) * 0.42;
+    chaser.position.z = S.chaserFlyFromZ - 26.0 * zCurve;
+    chaser.position.y = 0.25 + Math.sin(p2 * Math.PI * 0.92) * 5.2 + p2 * 1.35;
     if (S.chaserFlyT <= 0) {
+      spawnBurst(chaser.position.x, chaser.position.y, chaser.position.z);
       spawnDust(chaser.position.x, 0.05, chaser.position.z);
       startShock(chaser.position.x, 0.05, chaser.position.z);
       chaser.position.y = 0;
       chaser.visible = false;
+      huaQiang.rotation.set(0, Math.PI, 0);
+      huaQiang.position.y = 0;
+      if (huaQiang.userData && huaQiang.userData.clearRigPose) huaQiang.userData.clearRigPose();
       S.chaserReturnT = CONFIG.chaserReturnTime;
       S.chaserReturnDir = S.chaserFlyDir;
       S.chaserFlyFromX = null;
@@ -2766,6 +2841,7 @@
     skillSidekick.visible = false;
     elephantChargeState.active = false;
     skillElephant.visible = false;
+    skillCamBlend = 0;
     sidekickRing.visible = false;
     sidekickRingMat.opacity = 0;
     if (huaQiang.userData) {
@@ -2911,6 +2987,7 @@
     S.sidekickHitFx = false;
     elephantChargeState.active = false;
     skillElephant.visible = false;
+    skillCamBlend = 0;
     S.elephantCharges = 0;
     S.tipsShown = {};
     S.tipTimer = campaign ? 0 : CONFIG.tipStartDelay;
@@ -3278,8 +3355,10 @@
         var rushK = 1 - Math.min(1, S.lastChanceT / CONFIG.lastChanceTime);
         rushZOff = -(CONFIG.catchGap - 1.1) * rushK;
       }
-      chaser.position.z = S.gap + S.chaserZOff + rushZOff;
-      chaser.position.x += (player.position.x - chaser.position.x) * Math.min(1, dt * 4);
+      if (!(elephantChargeState.active && !elephantChargeState.hitDone)) {
+        chaser.position.z = S.gap + S.chaserZOff + rushZOff;
+        chaser.position.x += (player.position.x - chaser.position.x) * Math.min(1, dt * 4);
+      }
       if (S.chaserFlyT > 0) updateChaserFly(dt, S.gap + S.chaserZOff + rushZOff);
     }
     if (S.chaserReturnT > 0) {
@@ -3974,26 +4053,32 @@
     if (S.chaserFlyT > 0 && S.chaserFlyDelay <= 0 && !PIGUA.active) {
       var fTotal = Math.max(0.0001, S.chaserFlyMax);
       var fp = 1 - S.chaserFlyT / fTotal;
-      var fStiff = 0.12;
+      var fStiff = 0.05;
       var fp2 = Math.min(1, Math.max(0, (fp - fStiff) / (1 - fStiff)));
       var fArc = Math.sin(fp2 * Math.PI);
-      var fAngle = fp2 * Math.PI * 2 * CONFIG.chaserFlyLoops;
-      if (huaQiang.userData) {
-        var flail = Math.sin(fAngle * 5) * 1.2 * fArc;
-        huaQiang.userData.leftArm.rotation.x = -2.4 + flail;
-        huaQiang.userData.rightArm.rotation.x = -2.4 - flail;
-        huaQiang.userData.leftLeg.rotation.x = -1.6 + flail;
-        huaQiang.userData.rightLeg.rotation.x = 1.6 + flail;
-        if (huaQiang.userData.head) huaQiang.userData.head.rotation.x = flail * 1.1;
+      var fAngle = fp2 * Math.PI * 2 * 2.4;
+      var cuFly = huaQiang.userData;
+      if (cuFly && cuFly.isGLB && window.RunnerAnim) window.RunnerAnim.freeze(huaQiang);
+      if (cuFly) {
+        if (cuFly.clearRigPose) cuFly.clearRigPose();
+        var flail = Math.sin(fAngle * 4.5) * 1.15 * Math.max(0.35, fArc);
+        cuFly.leftArm.rotation.x = -2.2 + flail;
+        cuFly.rightArm.rotation.x = -2.2 - flail;
+        cuFly.leftLeg.rotation.x = -1.2 + flail * 0.85;
+        cuFly.rightLeg.rotation.x = 1.2 - flail * 0.85;
+        if (cuFly.leftKnee) cuFly.leftKnee.rotation.x = 0.7;
+        if (cuFly.rightKnee) cuFly.rightKnee.rotation.x = 0.7;
+        if (cuFly.head) cuFly.head.rotation.x = flail * 0.6;
       }
-      huaQiang.rotation.x = -0.85 * Math.cos(fAngle) - 0.4;
-      huaQiang.rotation.y = Math.PI + S.chaserFlyDir * 1.5 * Math.sin(fAngle * 2);
-      huaQiang.rotation.z = S.chaserFlyDir * 1.5 * Math.sin(fAngle);
+      huaQiang.rotation.x = -fAngle * 1.45 - 0.5;
+      huaQiang.rotation.y = Math.PI + S.chaserFlyDir * fAngle * 1.2;
+      huaQiang.rotation.z = S.chaserFlyDir * Math.sin(fAngle * 1.4) * 1.15;
       huaQiang.position.y = 0;
       if (S.chaserFlyT <= 0) {
         huaQiang.rotation.set(0, Math.PI, 0);
         huaQiang.position.y = 0;
-        if (huaQiang.userData && huaQiang.userData.head) huaQiang.userData.head.rotation.set(0, 0, 0);
+        if (cuFly && cuFly.clearRigPose) cuFly.clearRigPose();
+        if (cuFly && cuFly.head) cuFly.head.rotation.set(0, 0, 0);
         S.chaserHitT = 0;
         S.chaserHitMax = 0;
       }
@@ -4136,13 +4221,15 @@
     if (streetRoute) {
       var laneX = player.position.x;
       var lerp = THREE.MathUtils.lerp;
+      var wantSkillPull = (elephantChargeState.active || S.chaserFlyT > 0) ? 1 : 0;
+      skillCamBlend += (wantSkillPull - skillCamBlend) * Math.min(1, dt * 5.5);
       setStreetClosePosition(streetCameraPosition, laneX);
       targetX = lerp(laneX * .52 + .72, streetCameraPosition.x, k);
-      targetY = lerp(4.35, streetCameraPosition.y, k);
-      targetZ = lerp(streetWideDistance(chaseZ), streetCameraPosition.z, k);
+      targetY = lerp(4.35, streetCameraPosition.y + skillCamBlend * 0.42, k);
+      targetZ = lerp(streetWideDistance(chaseZ), streetCameraPosition.z + skillCamBlend * 1.25, k);
       var ahead = streetRoute.lookAhead(S.dist, 11);
       lookX = lerp(laneX * .48, ahead.x * .78 + laneX * .19, k);
-      lookY = lerp(1.35, 1.15, k);
+      lookY = lerp(1.35, 1.15 + skillCamBlend * 0.35, k);
       lookZ = lerp(-8.5, ahead.z, k);
     }
     var shakeX = 0;
