@@ -800,6 +800,149 @@
   scene.add(bloodRing);
   var bloodRingT = 0;
 
+  // ── 郝哥中刀 3D 抛物线喷血动画系统（动脉喷射血滴 + 血雾 + 落地飞溅血点，零 GC 对象池）──
+  var bloodSprayGroup = new THREE.Group();
+  bloodSprayGroup.visible = false;
+  scene.add(bloodSprayGroup);
+  var bloodDropGeo = new THREE.SphereGeometry(0.024, 7, 6);
+  var bloodMistGeo = new THREE.SphereGeometry(0.045, 8, 6);
+  var bloodDropMats = [
+    new THREE.MeshBasicMaterial({ color: 0x990f0f, transparent: true, opacity: 0.96 }),
+    new THREE.MeshBasicMaterial({ color: 0xc62828, transparent: true, opacity: 0.95 }),
+    new THREE.MeshBasicMaterial({ color: 0x6e0000, transparent: true, opacity: 0.96 })
+  ];
+  var bloodDrops = [];
+  for (var bdi = 0; bdi < 48; bdi++) {
+    var bMesh = new THREE.Mesh(bloodDropGeo, bloodDropMats[bdi % bloodDropMats.length].clone());
+    bMesh.visible = false;
+    bloodSprayGroup.add(bMesh);
+    bloodDrops.push({ mesh: bMesh, active: false, landed: false, x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, life: 0, maxLife: 1, size: 1 });
+  }
+  var bloodMists = [];
+  for (var bmi = 0; bmi < 10; bmi++) {
+    var mMat = new THREE.MeshBasicMaterial({ color: 0x9b111e, transparent: true, opacity: 0, depthWrite: false });
+    var mMesh = new THREE.Mesh(bloodMistGeo, mMat);
+    mMesh.visible = false;
+    bloodSprayGroup.add(mMesh);
+    bloodMists.push({ mesh: mMesh, mat: mMat, active: false, x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, life: 0, maxLife: 0.42, baseScale: 1 });
+  }
+  var bloodDropCursor = 0;
+  var bloodMistCursor = 0;
+
+  function spawnCampaignBloodSpray(ox, oy, oz, count, style) {
+    bloodSprayGroup.visible = true;
+    var n = Math.min(count || 24, bloodDrops.length);
+    for (var i = 0; i < n; i++) {
+      var d = bloodDrops[bloodDropCursor];
+      bloodDropCursor = (bloodDropCursor + 1) % bloodDrops.length;
+      // 横向+斜前抛物线喷射（严控 vz <= 0.95，绝不飞进镜头遮挡郝哥正脸）
+      var sideSign = style === 'stab' ? (Math.random() < 0.78 ? 1 : -1) : (i % 2 === 0 ? 1 : -1);
+      var latSpd = (style === 'clutch' ? 0.55 : 0.95) + Math.random() * 1.45;
+      d.active = true;
+      d.landed = false;
+      d.x = ox + (Math.random() - 0.5) * 0.12;
+      d.y = oy + (Math.random() - 0.5) * 0.10;
+      d.z = oz + (Math.random() - 0.5) * 0.08;
+      d.vx = sideSign * latSpd;
+      d.vy = (style === 'clutch' ? 0.65 : 1.05) + Math.random() * 1.35;
+      d.vz = (style === 'clutch' ? 0.25 : 0.30) + Math.random() * 0.65;
+      d.maxLife = 1.15 + Math.random() * 0.75;
+      d.life = d.maxLife;
+      d.size = 0.75 + Math.random() * 0.95;
+      d.mesh.position.set(d.x, d.y, d.z);
+      d.mesh.material.opacity = 0.96;
+      d.mesh.scale.set(d.size * 0.85, d.size * 1.75, d.size * 0.85);
+      d.mesh.visible = true;
+    }
+    var mistCount = style === 'stab' ? 5 : 3;
+    for (var j = 0; j < mistCount; j++) {
+      var m = bloodMists[bloodMistCursor];
+      bloodMistCursor = (bloodMistCursor + 1) % bloodMists.length;
+      m.active = true;
+      m.x = ox + (Math.random() - 0.5) * 0.16;
+      m.y = oy + (Math.random() - 0.5) * 0.10;
+      m.z = oz + 0.05 + Math.random() * 0.08;
+      m.vx = (Math.random() - 0.5) * 0.9 + (style === 'stab' ? 0.45 : 0);
+      m.vy = 0.15 + Math.random() * 0.45;
+      m.vz = 0.18 + Math.random() * 0.30;
+      m.maxLife = 0.36 + Math.random() * 0.18;
+      m.life = m.maxLife;
+      m.baseScale = 0.7 + Math.random() * 0.5;
+      m.mesh.position.set(m.x, m.y, m.z);
+      m.mesh.scale.setScalar(m.baseScale);
+      m.mat.opacity = 0.52;
+      m.mesh.visible = true;
+    }
+  }
+
+  function updateBloodSpray(dt) {
+    if (!bloodSprayGroup.visible) return;
+    var anyActive = false;
+    for (var i = 0; i < bloodDrops.length; i++) {
+      var d = bloodDrops[i];
+      if (!d.active) continue;
+      d.life -= dt;
+      if (d.life <= 0) {
+        d.active = false;
+        d.mesh.visible = false;
+        continue;
+      }
+      anyActive = true;
+      if (!d.landed) {
+        d.vy -= 9.8 * dt;
+        d.x += d.vx * dt;
+        d.y += d.vy * dt;
+        d.z += d.vz * dt;
+        if (d.y <= 0.025) {
+          d.y = 0.025;
+          d.landed = true;
+          d.mesh.rotation.set(0, Math.random() * Math.PI * 2, 0);
+          d.mesh.scale.set(d.size * 2.1, 0.14, d.size * 2.1);
+        } else {
+          // 飞行中沿速度方向拉长成动脉血丝状
+          var spd = Math.sqrt(d.vx * d.vx + d.vy * d.vy + d.vz * d.vz) + 0.001;
+          d.mesh.scale.set(d.size * 0.72, d.size * (1.2 + Math.min(2.4, spd * 0.42)), d.size * 0.72);
+          d.mesh.rotation.set(Math.atan2(d.vz, d.vy), 0, -Math.atan2(d.vx, Math.abs(d.vy) + 0.25));
+        }
+        d.mesh.position.set(d.x, d.y, d.z);
+      }
+      var fade = d.life < 0.35 ? (d.life / 0.35) : 1;
+      d.mesh.material.opacity = (d.landed ? 0.85 : 0.96) * fade;
+    }
+    for (var j = 0; j < bloodMists.length; j++) {
+      var m = bloodMists[j];
+      if (!m.active) continue;
+      m.life -= dt;
+      if (m.life <= 0) {
+        m.active = false;
+        m.mesh.visible = false;
+        continue;
+      }
+      anyActive = true;
+      var p = 1 - m.life / m.maxLife;
+      m.x += m.vx * dt;
+      m.y += m.vy * dt;
+      m.z += m.vz * dt;
+      m.vy -= 1.8 * dt;
+      m.mesh.position.set(m.x, m.y, m.z);
+      m.mesh.scale.setScalar(m.baseScale * (1 + p * 2.4));
+      m.mat.opacity = 0.65 * (1 - p);
+    }
+    if (!anyActive) bloodSprayGroup.visible = false;
+  }
+
+  function clearBloodSpray() {
+    bloodSprayGroup.visible = false;
+    for (var i = 0; i < bloodDrops.length; i++) {
+      bloodDrops[i].active = false;
+      bloodDrops[i].mesh.visible = false;
+    }
+    for (var j = 0; j < bloodMists.length; j++) {
+      bloodMists[j].active = false;
+      bloodMists[j].mesh.visible = false;
+    }
+  }
+
   var fxCard = streetItems ? streetItems.cert() : window.Obstacles.createCert();
   fxCard.visible = false;
   scene.add(fxCard);
@@ -1358,14 +1501,15 @@
       var bss = 0.5 + bsp * 2.0;
       bloodStain.scale.set(bss, bss, 1);
     }
-    if (bloodPoolT >= 0 && S.mode === 'gameover') {
+    if (bloodPoolT >= 0 && (S.mode === 'gameover' || S.campaignCatchT > 0)) {
       bloodPoolT += dt;
-      var bpp = Math.min(1, bloodPoolT / 3.4);
+      var bpp = Math.min(1, bloodPoolT / 2.2);
       bloodPool.visible = true;
-      bloodPool.position.set(player.position.x, 0.02, player.position.z + 0.08);
-      bloodPoolMat.opacity = 0.12 + bpp * 0.5;
-      bloodPool.scale.set(0.4 + bpp * 2.2, 0.4 + bpp * 2.2, 1);
+      bloodPool.position.set(player.position.x, 0.02, player.position.z + 0.10);
+      bloodPoolMat.opacity = 0.18 + bpp * 0.56;
+      bloodPool.scale.set(0.45 + bpp * 2.1, 0.45 + bpp * 2.1, 1);
     }
+    updateBloodSpray(dt);
     if (bloodRingT > 0) {
       bloodRingT -= dt;
       var brt = 1 - Math.max(0, bloodRingT) / 0.6;
@@ -2927,6 +3071,8 @@
       S.campaignCatchMax = 6.8;
       S.campaignCatchT = S.campaignCatchMax;
       S.campaignCatchBlood = false;
+      S.campaignCatchBlood2 = false;
+      S.campaignCatchBlood3 = false;
       S.campaignCatchScream = false;
       S.campaignCatchSarilang = false;
       S.campaignCatchFamily = false;
@@ -3247,6 +3393,7 @@
     bloodPoolT = -1;
     bloodRing.visible = false;
     bloodRingT = 0;
+    clearBloodSpray();
     fxCard.visible = false;
     fxCardT = 0;
     ring.visible = false;
@@ -3334,6 +3481,7 @@
     camera.updateProjectionMatrix();
     bloodRing.visible = false;
     bloodRingT = 0;
+    clearBloodSpray();
     bloodFountainT = 0;
     dripPoints.visible = false;
     piguaSlashArc.visible = false;
@@ -3538,10 +3686,15 @@
           exhaustEmitCd = 0.085;
           emitExhaustPuff();
         }
-        // 镜头 3 起隐藏远处已退场的郝哥、小弟，避免边缘剪影穿帮
+        // 镜头 3 起隐藏远处已退场的郝哥、小弟与地面血迹，避免边缘剪影穿帮
         if (T >= 2.55) {
           xiaoDi.visible = false;
           playerBody.visible = false;
+          bloodPool.visible = false;
+          bloodPoolT = -1;
+          bloodStain.visible = false;
+          bloodStainT = -1;
+          clearBloodSpray();
         }
         // 镜头 4: 路边写实一家三口（左-西装爸爸挥手喊 + 中-红背心女儿 + 右-橄榄灰妈妈侧目），背靠右侧商铺门面
         if (T >= 3.85) {
@@ -3685,6 +3838,8 @@
         S.campaignCatchBlood = true;
         bloodRingT = 0.85;
         bloodRing.visible = true;
+        bloodPoolT = 0;
+        spawnCampaignBloodSpray(player.position.x + 0.04, player.position.y + 1.08, player.position.z + 0.24, 32, 'stab');
         piguaHitSpark.position.set(player.position.x, player.position.y + 1.18, player.position.z + 0.28);
         piguaHitSpark.rotation.set(0, 0, 0.35);
         piguaHitSpark.scale.setScalar(0.6);
@@ -3698,6 +3853,16 @@
         S.shake = 0.55;
         S.flash = 0.72;
       }
+      // 镜头 2 捂腹踉跄与小弟扶住时，腹部伤口两次脉动喷血（每帧推进喷血抛物线动画）
+      if (T >= 1.12 && !S.campaignCatchBlood2) {
+        S.campaignCatchBlood2 = true;
+        spawnCampaignBloodSpray(player.position.x, player.position.y + 1.04, player.position.z + 0.28, 24, 'clutch');
+      }
+      if (T >= 1.66 && !S.campaignCatchBlood3) {
+        S.campaignCatchBlood3 = true;
+        spawnCampaignBloodSpray(player.position.x, player.position.y + 0.98, player.position.z + 0.30, 22, 'clutch');
+      }
+      updateBloodSpray(dt);
       if (piguaSparkT > 0) {
         piguaSparkT = Math.max(0, piguaSparkT - dt);
         var csk = piguaSparkT / 0.26;
