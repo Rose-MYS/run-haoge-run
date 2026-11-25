@@ -512,6 +512,7 @@ window.StreetArt = (function () {
     templates.forEach(function (kit) {
       kit.placements.sort(function (a, b) { return a.d - b.d; });
       var capacity = campaign ? maxVisible(kit.placements) : kit.placements.length;
+      kit.capacity = capacity;
       var shadow = kit !== drain && kit !== utilityCovers;
       kit.batch = kit.meshes.map(function (mesh) {
         return batch(mesh.geo, mesh.material, capacity, shadow);
@@ -525,7 +526,10 @@ window.StreetArt = (function () {
       if (count) mesh.instanceMatrix.needsUpdate = true;
     }
 
-    return function draw(distance) {
+    var lastDistance = 0;
+
+    function draw(distance) {
+      lastDistance = distance;
       templates.forEach(function (kit) {
         var count = 0, farCount = 0;
         var first = campaign ? firstVisible(kit.placements, distance) : 0;
@@ -555,7 +559,50 @@ window.StreetArt = (function () {
         kit.batch.forEach(function (mesh) { show(mesh, count); });
         if (kit.farBatch) show(kit.farBatch, farCount);
       });
-    };
+    }
+
+    // ── 异步升级 7 套高精度 Blender 90 年代北方老街 PBR GLB 建筑/瓜摊/大槐树/牌楼（离线 file:// 自动静默回退程序化方块）──
+    var canLoadSceneGLB = typeof window !== 'undefined' && window.THREE && THREE.GLTFLoader &&
+      !(location && location.protocol === 'file:');
+    try {
+      if (new URLSearchParams(location.search || '').get('models') === 'procedural') canLoadSceneGLB = false;
+    } catch (e) {}
+    if (canLoadSceneGLB) {
+      var glbLoader = new THREE.GLTFLoader();
+      [
+        { kit: stall, url: 'assets/models/scene-stall.glb' },
+        { kit: marketHouse, url: 'assets/models/scene-market-house.glb' },
+        { kit: shop, url: 'assets/models/scene-shop.glb' },
+        { kit: repair, url: 'assets/models/scene-repair.glb' },
+        { kit: apartment, url: 'assets/models/scene-apartment.glb' },
+        { kit: courtyard, url: 'assets/models/scene-courtyard.glb' },
+        { kit: entrance, url: 'assets/models/scene-entrance-gate.glb' },
+      ].forEach(function (spec) {
+        if (!spec.kit || !spec.kit.capacity) return;
+        glbLoader.load(spec.url, function (gltf) {
+          if (!gltf || !gltf.scene) return;
+          gltf.scene.updateMatrixWorld(true);
+          var newBatches = [];
+          gltf.scene.traverse(function (node) {
+            if (!node || !node.isMesh || !node.geometry) return;
+            var geo = node.geometry.clone();
+            geo.applyMatrix4(node.matrixWorld);
+            var mat = node.material;
+            if (mat && mat.map) mat.map.encoding = THREE.sRGBEncoding;
+            var inst = batch(geo, mat, spec.kit.capacity, false);
+            newBatches.push(inst);
+          });
+          if (!newBatches.length) return;
+          spec.kit.batch.forEach(function (oldMesh) {
+            if (oldMesh.parent) oldMesh.parent.remove(oldMesh);
+          });
+          spec.kit.batch = newBatches;
+          draw(lastDistance);
+        }, undefined, function () {});
+      });
+    }
+
+    return draw;
   }
 
   return { create: create };

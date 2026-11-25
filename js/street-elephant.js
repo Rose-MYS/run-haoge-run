@@ -450,6 +450,7 @@
 
     root.userData = {
       royal: royal,
+      baseBodyY: 1.66,
       bodyPivot: bodyPivot,
       headGroup: headGroup,
       earL: earL,
@@ -463,12 +464,95 @@
       legBL: legBL,
       legBR: legBR
     };
+    attachElephantGLB(root, royal);
     return root;
+  }
+
+  // ── 异步升级为 Blender 高精度 PBR 大象 GLB（保留全部 16 个关节节点，离线 file:// 自动静默回退程序化模型）──
+  var glbCache = { street: null, royal: null };
+  var glbLoading = { street: false, royal: false };
+  var glbWaiters = { street: [], royal: [] };
+
+  function canLoadElephantGLB() {
+    if (typeof window === 'undefined' || !window.THREE || !THREE.GLTFLoader) return false;
+    if (location && location.protocol === 'file:') return false;
+    try {
+      var p = new URLSearchParams(location.search || '');
+      if (p.get('models') === 'procedural') return false;
+    } catch (e) {}
+    return true;
+  }
+
+  function applyElephantGLBToRoot(root, templateScene) {
+    if (!root || !templateScene) return;
+    var clone = templateScene.clone(true);
+    clone.traverse(function (o) {
+      if (o && o.isMesh) {
+        o.castShadow = false;
+        o.receiveShadow = true;
+      }
+    });
+    var bp = clone.getObjectByName('BodyPivot');
+    var hg = clone.getObjectByName('HeadGroup');
+    var eL = clone.getObjectByName('EarL');
+    var eR = clone.getObjectByName('EarR');
+    var tB = clone.getObjectByName('TrunkBase');
+    var tM = clone.getObjectByName('TrunkMid');
+    var tT = clone.getObjectByName('TrunkTip');
+    var tp = clone.getObjectByName('TailPivot');
+    var lFL = clone.getObjectByName('LegFL'), kFL = clone.getObjectByName('KneeFL');
+    var lFR = clone.getObjectByName('LegFR'), kFR = clone.getObjectByName('KneeFR');
+    var lBL = clone.getObjectByName('LegBL'), kBL = clone.getObjectByName('KneeBL');
+    var lBR = clone.getObjectByName('LegBR'), kBR = clone.getObjectByName('KneeBR');
+    if (!bp || !hg || !eL || !eR || !tB || !tM || !tT || !tp || !lFL || !kFL || !lFR || !kFR || !lBL || !kBL || !lBR || !kBR) {
+      return;
+    }
+    while (root.children.length > 0) root.remove(root.children[0]);
+    root.add(clone);
+    var u = root.userData || {};
+    u.isGLB = true;
+    u.baseBodyY = bp.position.y;
+    u.bodyPivot = bp;
+    u.headGroup = hg;
+    u.earL = eL;
+    u.earR = eR;
+    u.trunkBase = tB;
+    u.trunkMid = tM;
+    u.trunkTip = tT;
+    u.tailPivot = tp;
+    u.legFL = { hip: lFL, knee: kFL };
+    u.legFR = { hip: lFR, knee: kFR };
+    u.legBL = { hip: lBL, knee: kBL };
+    u.legBR = { hip: lBR, knee: kBR };
+    root.userData = u;
+  }
+
+  function attachElephantGLB(root, royal) {
+    if (!canLoadElephantGLB()) return;
+    var key = royal ? 'royal' : 'street';
+    if (glbCache[key]) {
+      applyElephantGLBToRoot(root, glbCache[key]);
+      return;
+    }
+    glbWaiters[key].push(root);
+    if (glbLoading[key]) return;
+    glbLoading[key] = true;
+    var url = royal ? 'assets/models/elephant-royal.glb' : 'assets/models/elephant-street.glb';
+    var loader = new THREE.GLTFLoader();
+    loader.load(url, function (gltf) {
+      if (!gltf || !gltf.scene) return;
+      glbCache[key] = gltf.scene;
+      var list = glbWaiters[key].splice(0);
+      for (var i = 0; i < list.length; i++) applyElephantGLBToRoot(list[i], gltf.scene);
+    }, undefined, function () {
+      glbLoading[key] = false;
+    });
   }
 
   function animateElephant(el, t, mode, intensity) {
     if (!el || !el.userData) return;
     var u = el.userData;
+    var baseY = u.baseBodyY !== undefined ? u.baseBodyY : 1.66;
     var speed = mode === 'charge' ? 10.5 : (mode === 'startle' ? 13.5 : 3.8);
     var ph = t * speed;
     var swing = mode === 'charge' ? 0.52 : (mode === 'startle' ? 0.34 : 0.28);
@@ -486,7 +570,7 @@
       var vib = Math.sin(t * 22);
       var stomp = Math.sin(t * 14);
       // 象鸣时前躯明显昂起、前腿抬蹄踏地、双耳大幅张开扇动、长鼻高举震颤
-      u.bodyPivot.position.y = 1.66 + 0.34 * env + Math.abs(vib) * 0.05 * env;
+      u.bodyPivot.position.y = baseY + 0.34 * env + Math.abs(vib) * 0.05 * env;
       u.bodyPivot.rotation.x = -0.26 * env;
       u.bodyPivot.rotation.z = Math.sin(t * 10) * 0.045 * env;
       u.headGroup.rotation.x = -0.44 * env + vib * 0.07 * env;
@@ -513,7 +597,7 @@
     stepLeg(u.legBL, Math.PI + 0.35, false);
 
     if (mode === 'startle') {
-      u.bodyPivot.position.y = 1.66 + Math.abs(Math.sin(ph * 0.8)) * 0.20;
+      u.bodyPivot.position.y = baseY + Math.abs(Math.sin(ph * 0.8)) * 0.20;
       u.bodyPivot.rotation.x = -0.16;
       u.headGroup.rotation.x = -0.32;
       u.trunkBase.rotation.x = -1.20 + Math.sin(ph * 1.4) * 0.16;
@@ -526,7 +610,7 @@
     }
 
     if (mode === 'charge') {
-      u.bodyPivot.position.y = 1.66 + Math.abs(Math.sin(ph)) * 0.14;
+      u.bodyPivot.position.y = baseY + Math.abs(Math.sin(ph)) * 0.14;
       u.bodyPivot.rotation.x = 0.08;
       u.bodyPivot.rotation.z = Math.cos(ph) * 0.035;
       u.headGroup.rotation.x = -0.14 + Math.sin(ph * 0.5) * 0.06;
@@ -540,7 +624,7 @@
     }
 
     // walk
-    u.bodyPivot.position.y = 1.66 + Math.abs(Math.sin(ph)) * 0.06;
+    u.bodyPivot.position.y = baseY + Math.abs(Math.sin(ph)) * 0.06;
     u.bodyPivot.rotation.x = 0;
     u.bodyPivot.rotation.z = Math.sin(ph) * 0.028;
     u.headGroup.rotation.x = Math.sin(ph * 0.5) * 0.05;
