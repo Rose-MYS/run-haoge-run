@@ -3572,7 +3572,7 @@
             }
           }
         }
-        // 镜头 5: 华强回头邪魅一笑（smirk morphTarget 最大位移仅 4.57mm，平滑拉高权重至 3.8 让嘴角斜扬得意坏笑肉眼清晰可见！）
+        // 镜头 5：标准权重下逐渐抬起右嘴角。
         if (T >= 5.25) {
           if (!S.campaignCatchSmirk) {
             S.campaignCatchSmirk = true;
@@ -3581,7 +3581,7 @@
           }
           if (ua && ua.faceMorphs && ua.faceMorphs.length > 0) {
             var smW = Math.min(1, (T - 5.25) / 0.55);
-            ua.faceMorphs[0] = 1.0 + easeOut(smW) * 2.8;
+            ua.faceMorphs[0] = easeOut(smW);
           }
         }
       }
@@ -3646,10 +3646,13 @@
         haoGe.position.y = 0;
         if (up) {
           if (up.spine) up.spine.rotation.x = 0.22 * ft;
-          if (up.leftArm) { up.leftArm.rotation.x = -0.82 * ft; up.leftArm.rotation.z = -0.88; }
-          if (up.leftForeArm) up.leftForeArm.rotation.x = -1.15 * ft;
-          if (up.rightArm) { up.rightArm.rotation.x = -0.82 * ft; up.rightArm.rotation.z = 0.88; }
-          if (up.rightForeArm) up.rightForeArm.rotation.x = -1.15 * ft;
+          if (up.applyStomachClutchPose) up.applyStomachClutchPose(ft);
+          else {
+            if (up.leftArm) { up.leftArm.rotation.x = -0.82 * ft; up.leftArm.rotation.z = -0.88; }
+            if (up.leftForeArm) up.leftForeArm.rotation.x = -1.15 * ft;
+            if (up.rightArm) { up.rightArm.rotation.x = -0.82 * ft; up.rightArm.rotation.z = 0.88; }
+            if (up.rightForeArm) up.rightForeArm.rotation.x = -1.15 * ft;
+          }
           if (up.leftLeg) up.leftLeg.rotation.x = -0.18 * ft;
           if (up.leftKnee) up.leftKnee.rotation.x = 0.25 * ft;
           if (up.rightLeg) up.rightLeg.rotation.x = 0.14 * ft;
@@ -3662,10 +3665,13 @@
         haoGe.position.y = -0.10 * ht;
         if (up) {
           if (up.spine) up.spine.rotation.x = 0.22 - 0.14 * ht;
-          if (up.leftArm) { up.leftArm.rotation.x = -0.92; up.leftArm.rotation.z = -0.92; }
-          if (up.leftForeArm) up.leftForeArm.rotation.x = -1.25;
-          if (up.rightArm) { up.rightArm.rotation.x = -0.92; up.rightArm.rotation.z = 0.92; }
-          if (up.rightForeArm) up.rightForeArm.rotation.x = -1.25;
+          if (up.applyStomachClutchPose) up.applyStomachClutchPose(1);
+          else {
+            if (up.leftArm) { up.leftArm.rotation.x = -0.92; up.leftArm.rotation.z = -0.92; }
+            if (up.leftForeArm) up.leftForeArm.rotation.x = -1.25;
+            if (up.rightArm) { up.rightArm.rotation.x = -0.92; up.rightArm.rotation.z = 0.92; }
+            if (up.rightForeArm) up.rightForeArm.rotation.x = -1.25;
+          }
           if (up.leftLeg) up.leftLeg.rotation.x = -0.18 - 0.18 * ht;
           if (up.leftKnee) up.leftKnee.rotation.x = 0.25 + 0.35 * ht;
           if (up.rightLeg) up.rightLeg.rotation.x = 0.14;

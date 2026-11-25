@@ -97,7 +97,7 @@ window.StreetRoute = (function () {
     return texture;
   }
 
-  function makeTurnMarkers(parent) {
+  function makeTurnMarkers(parent, asphalt, paving) {
     var group = new THREE.Group();
     group.name = 'StreetTurnMarkers';
     parent.add(group);
@@ -222,15 +222,55 @@ window.StreetRoute = (function () {
       ring.position.set(cx, 0.52, 1.15);
       barrierGroup.add(cone, ring);
     });
+    var fallbackWall = new THREE.Group();
+    barrierGroup.children.slice().forEach(function (part) { fallbackWall.add(part); });
+    var backing = new THREE.Mesh(new THREE.BoxGeometry(12.4, 1.75, .10), concreteMat);
+    backing.position.set(0, 1.62, -.15);
+    fallbackWall.add(backing);
+    fallbackWall.scale.x = 15.6 / 12.4;
+    barrierGroup.add(fallbackWall);
     blockerRoot.add(barrierGroup);
+    if (window.location.protocol !== 'file:' && THREE.GLTFLoader &&
+        new URLSearchParams(window.location.search).get('models') !== 'procedural') {
+      new THREE.GLTFLoader().load('assets/models/scene-turn-barricade.glb', function (asset) {
+        var lamps = [0, 1, 2, 3].map(function (index) { return asset.scene.getObjectByName('Beacon' + index); });
+        if (!lamps.every(function (lamp) { return lamp && lamp.isMesh; })) return;
+        lamps.forEach(function (lamp) { lamp.material = beaconMat; });
+        asset.scene.traverse(function (part) {
+          if (part.isMesh) { part.receiveShadow = true; part.castShadow = true; }
+        });
+        barrierGroup.add(asset.scene);
+        barrierGroup.remove(fallbackWall);
+      }, undefined, function () {});
+    }
+    var apron = new THREE.Group();
+    var padGeo = new THREE.PlaneGeometry(1, 1);
+    padGeo.rotateX(-Math.PI / 2);
+    function pad(material, height) {
+      var pavement = new THREE.Mesh(padGeo, material);
+      pavement.position.y = height;
+      pavement.receiveShadow = true;
+      apron.add(pavement);
+      return pavement;
+    }
+    var deadRoad = pad(asphalt, -.012);
+    var pavements = [pad(paving, .109), pad(paving, .109)];
+    blockerRoot.add(apron);
 
     // 过路大象家庭群（面向来车方向整齐列队在沥青路面内，杜绝与路侧楼房穿模，象鸣时正面清晰展示昂头举鼻与声波环）
     var elephantConvoy = new THREE.Group();
     var elephantSpecs = [
-      { baseScale: 1.02, slotX: -1, baseZ: -0.10, yawOff: 0.16, phase: 0.0 },
-      { baseScale: 0.98, slotX: 1, baseZ: -0.45, yawOff: -0.16, phase: 0.9 },
-      { baseScale: 0.64, slotX: 0, baseZ: 1.35, yawOff: 0.0, phase: 1.6 },
+      { baseScale: 1.04, baseZ: -.13, yawOff: .09, phase: 0 },
+      { baseScale: 1.17, baseZ: -.42, yawOff: -.035, phase: 1.0 },
+      { baseScale: .78, baseZ: .18, yawOff: .045, phase: 1.8 },
+      { baseScale: 1.02, baseZ: -.14, yawOff: -.10, phase: 2.6 }
     ];
+    var herdWidth = 0;
+    elephantSpecs.forEach(function (spec) {
+      var width = 1.63 * spec.baseScale;
+      spec.slotX = herdWidth + width / 2;
+      herdWidth += width;
+    });
     var convoyMembers = [];
     if (window.StreetElephant) {
       elephantSpecs.forEach(function (spec) {
@@ -261,7 +301,7 @@ window.StreetRoute = (function () {
         depthWrite: false
       });
       var waveMesh = new THREE.Mesh(new THREE.TorusGeometry(0.95, 0.075, 8, 24), waveMat);
-      waveMesh.rotation.x = Math.PI / 2;
+      waveMesh.rotation.x = -.18;
       trumpetWaveGroup.add(waveMesh);
       trumpetWaves.push({ mesh: waveMesh, mat: waveMat, offset: wi * 0.5 });
     }
@@ -298,29 +338,32 @@ window.StreetRoute = (function () {
       var base = project(blockerTurn.distance, 0);
       var fwdX = -Math.sin(base.yaw);
       var fwdZ = -Math.cos(base.yaw);
-      var sideX = Math.cos(base.yaw);
-      var sideZ = -Math.sin(base.yaw);
+
       var isElephant = blockerType === 'elephant' && convoyMembers.length;
-      // 大象严格停在弯口沥青路面中央（ahead=4.2, outShift=0），避免伸入外侧人行道与楼房穿模
-      var ahead = isElephant ? 4.2 : 11.4;
-      var outShift = isElephant ? 0 : -blockerTurn.direction * 1.0;
+      var halfW = streetWidth(blockerTurn.distance);
+      var scaleFactor = (2 * halfW - .30) / herdWidth;
+      var ahead = RADIUS + halfW + (isElephant ? 2.9 * scaleFactor : 1.65);
+      var depth = ahead + (isElephant ? 2.7 : 1.1);
+      barrierGroup.scale.x = 2 * (halfW + 3.4) / 15.6;
+      apron.position.z = ahead - depth / 2;
+      deadRoad.scale.set(2 * halfW, 1, depth);
+      pavements.forEach(function (pavement, index) {
+        pavement.scale.set(3.4, 1, depth);
+        pavement.position.x = (index ? 1 : -1) * (halfW + 1.7);
+      });
 
       blockerRoot.position.set(
-        base.x + fwdX * ahead + sideX * outShift,
+        base.x + fwdX * ahead,
         0,
-        base.z + fwdZ * ahead + sideZ * outShift
+        base.z + fwdZ * ahead
       );
-      blockerRoot.rotation.y = isElephant ? base.yaw : (base.yaw - blockerTurn.direction * 0.14);
+      blockerRoot.rotation.y = base.yaw;
 
       var walkT = elapsed || 0;
       if (isElephant) {
         barrierGroup.visible = false;
         elephantConvoy.visible = true;
-        var halfW = streetWidth(blockerTurn.distance);
-        var roadScale = Math.min(1, halfW / 4.35);
-        var scaleFactor = 0.80 + 0.20 * roadScale;
-        var spreadX = Math.max(1.12, (halfW - 1.55) * 0.72);
-        var idleSway = Math.sin(walkT * 0.85) * 0.12 * roadScale;
+        var idleSway = Math.sin(walkT * .85) * .016;
         var trumpetEnv = 0;
         if (trumpetState && trumpetState.active && trumpetState.dur > 0) {
           var tp = Math.max(0, Math.min(1, (walkT - trumpetState.startT) / trumpetState.dur));
@@ -334,13 +377,13 @@ window.StreetRoute = (function () {
         for (var mi = 0; mi < convoyMembers.length; mi++) {
           var m = convoyMembers[mi];
           m.el.scale.setScalar(m.baseScale * scaleFactor);
-          m.el.position.set(m.slotX * spreadX + idleSway, 0, m.baseZ * scaleFactor);
+          m.el.position.set((m.slotX - herdWidth / 2) * scaleFactor + idleSway, 0, m.baseZ * scaleFactor);
           // 大象局部坐标头部朝 +Z，rotation.y≈0 时正面向迎面跑来的玩家，正面呈现昂头举鼻、扇耳与声波环
-          m.el.rotation.y = m.yawOff + Math.sin(walkT * 0.9 + m.phase) * 0.06;
+          m.el.rotation.y = m.yawOff + Math.sin(walkT * .9 + m.phase) * .022;
           if (showMissed) {
-            window.StreetElephant.animateElephant(m.el, walkT + m.phase, 'trumpet', 1);
+            window.StreetElephant.animateElephant(m.el, walkT, 'trumpet', 1);
           } else if (isTrumpeting) {
-            window.StreetElephant.animateElephant(m.el, walkT + m.phase * 0.35, 'trumpet', trumpetEnv);
+            window.StreetElephant.animateElephant(m.el, walkT, 'trumpet', trumpetEnv);
           } else {
             window.StreetElephant.animateElephant(m.el, walkT + m.phase, 'walk');
           }
@@ -446,7 +489,7 @@ window.StreetRoute = (function () {
     var gutterMaterial = new THREE.MeshStandardMaterial({ map: roadMaterial.map, color: 0x94928a, roughness: 0.92 });
     var scenery = new THREE.Group();
     scene.add(scenery);
-    var drawMarkers = makeTurnMarkers(scenery);
+    var drawMarkers = makeTurnMarkers(scenery, roadMaterial, sidewalkMaterial);
     var soil = new THREE.Mesh(new THREE.PlaneGeometry(255, 255),
       new THREE.MeshLambertMaterial({ color: 0x716e60 }));
     soil.rotation.x = -Math.PI / 2;
@@ -685,7 +728,31 @@ window.StreetRoute = (function () {
       return turn.blocker === 'elephant' ? '撞上过路大象！' : '撞上封路护栏！';
     }
 
-    var drawArt = window.StreetArt.create(staticScenery, project, streetWidth, stages || []);
+    function occupiesTurnApron(distance, side, offset, scale, along, box) {
+      var center = {};
+      sample(distance, center);
+      var lateral = side * (streetWidth(distance) + offset);
+      var cx = center.x + Math.cos(center.angle) * lateral;
+      var cz = center.z + Math.sin(center.angle) * lateral;
+      var yaw = -center.angle - (along ? 0 : side * Math.PI / 2);
+      return turns.some(function (turn) {
+        if (!turn.dir || Math.abs(distance - turn.distance) > ARC + 16) return false;
+        var sn = Math.sin(turn.heading), cs = Math.cos(turn.heading);
+        var minX = Infinity, maxX = -Infinity, minD = Infinity, maxD = -Infinity;
+        [box.min.x, box.max.x].forEach(function (right) {
+          [box.min.z, box.max.z].forEach(function (front) {
+            var dx = cx - turn.x + scale * (right * Math.cos(yaw) + front * Math.sin(yaw));
+            var dz = cz - turn.z + scale * (front * Math.cos(yaw) - right * Math.sin(yaw));
+            var x = dx * cs + dz * sn, ahead = dx * sn - dz * cs;
+            minX = Math.min(minX, x); maxX = Math.max(maxX, x);
+            minD = Math.min(minD, ahead); maxD = Math.max(maxD, ahead);
+          });
+        });
+        var width = streetWidth(turn.distance);
+        return minX < width + 3.65 && maxX > -width - 3.65 && maxD > 1 && minD < RADIUS + width + 7;
+      });
+    }
+    var drawArt = window.StreetArt.create(staticScenery, project, streetWidth, stages || [], occupiesTurnApron);
     var drawCrowd = window.StreetCrowd && window.StreetCrowd.create(scenery, project, streetWidth, stages);
     var transformed = [];
     var particles = new WeakMap();

@@ -836,7 +836,7 @@ window.RunnerModels = (function () {
 
     // 按原剧视频（00:35 / 00:45 / 01:07 / 02:11）为华强左门襟挂接黑白斜纹字母织带饰条，并优化黑衣丝光质感
     var hqChest = model.getObjectByName('Spine01') || model.getObjectByName('Spine02');
-    if (hqChest) {
+    if (hqChest && !skin.userData.astraSurface) {
       var ribbonCanvas = document.createElement('canvas');
       ribbonCanvas.width = 64;
       ribbonCanvas.height = 256;
@@ -983,6 +983,18 @@ window.RunnerModels = (function () {
     bind('rightLeg', boneNamesAny('RightUpLeg'), 0);
     bind('leftKnee', boneNamesAny('LeftLeg'), 0);
     bind('rightKnee', boneNamesAny('RightLeg'), 0);
+    bind('leftHand', boneNamesAny('LeftHand'), 0);
+    bind('rightHand', boneNamesAny('RightHand'), 0);
+    body.applyStomachClutchPose = function (intensity) {
+      var t = THREE.MathUtils.clamp(intensity, 0, 1);
+      var rest = body.currentAction ? 0 : .63;
+      body.leftArm.rotation.set(-.5135 * t, -.3765 * t, (rest - .1631) * t);
+      body.rightArm.rotation.set(-.5114 * t, .3732 * t, (.1506 - rest) * t);
+      body.leftForeArm.rotation.set(-.5488 * t, -.4050 * t, -1.1982 * t);
+      body.rightForeArm.rotation.set(-.2421 * t, .3457 * t, 1.1580 * t);
+      body.leftHand.rotation.set(-.1249 * t, -.3340 * t, -.6062 * t);
+      body.rightHand.rotation.set(-.0819 * t, .6172 * t, .5325 * t);
+    };
     bind('leftFoot', boneNamesAny('LeftFoot'), 0);
     bind('rightFoot', boneNamesAny('RightFoot'), 0);
     body.clearRigPose = function () {
@@ -1139,7 +1151,8 @@ window.RunnerModels = (function () {
 
     // 2. 敞开夹克白滚边 + 军绿内搭 T 恤胸前红黄黑彩色图腾印花
     var chestBone = findBone(model, boneNamesAny('Spine01').concat(boneNamesAny('Spine1')).concat(boneNamesAny('Spine')));
-    if (chestBone && !chestBone.userData.haogeTeeAdded) {
+    var reviewedSkin = model.getObjectByName('HaogeReviewed');
+    if (chestBone && !(reviewedSkin && reviewedSkin.userData.astraSurface) && !chestBone.userData.haogeTeeAdded) {
       chestBone.userData.haogeTeeAdded = true;
       var invC = model.scale && model.scale.x ? (1 / model.scale.x) : 1;
       var teeCanvas = document.createElement('canvas');
@@ -1309,7 +1322,7 @@ window.RunnerModels = (function () {
     var u = runner && runner.userData;
     if (!u || !u.isGLB) return;
     u.faceKind = kind;
-    if (u.faceMorphs) u.faceMorphs[0] = kind === 'huaqiang-smirk' ? 3.6 : 0;
+    if (u.faceMorphs) u.faceMorphs[0] = kind === 'huaqiang-smirk' ? 1 : 0;
     if (!u.faceMesh) return;
     u.faceMesh.material.map = (kind === 'haoge' && haogeFaceTex) ? haogeFaceTex : faceTexture(kind);
     u.faceMesh.material.transparent = kind === 'haoge' && !!haogeFaceTex;

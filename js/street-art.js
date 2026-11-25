@@ -76,7 +76,7 @@ window.StreetArt = (function () {
     return material;
   }
 
-  function create(parent, project, streetWidth, exits) {
+  function create(parent, project, streetWidth, exits, occupiesTurnApron) {
     var campaign = exits.length > 0;
     var oldTownStart = campaign ? exits[1].from : 95;
     var alleyStart = campaign ? exits[2].from : 240;
@@ -430,6 +430,16 @@ window.StreetArt = (function () {
     var templates = buildings.concat([stall, vendorBoard, haogeBoard, poles, alleyBits,
       entrance, busStop, utilityCovers, clothRack, drain]);
     function place(template, side, d, offset, scale, along) {
+      if (side && occupiesTurnApron) {
+        if (!template.footprint) {
+          template.footprint = new THREE.Box3();
+          template.meshes.forEach(function (part) {
+            part.geo.computeBoundingBox();
+            template.footprint.union(part.geo.boundingBox);
+          });
+        }
+        if (occupiesTurnApron(d, side, offset, scale, along, template.footprint)) return;
+      }
       template.placements.push({ side: side, d: d, offset: offset, scale: scale, along: along, fixed: false });
     }
     var guide = new THREE.MeshBasicMaterial({ color: 0x9bb985 });
